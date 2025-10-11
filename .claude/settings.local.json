@@ -4,7 +4,10 @@
       "Bash(python:*)",
       "Bash(uv run:*)",
       "Bash(awk:*)",
-      "Bash(./test.sh:*)"
+      "Bash(./test.sh:*)",
+      "Bash(chmod:*)",
+      "Bash(./nb.sh)",
+      "Bash(./nb.sh:*)"
     ],
     "deny": [],
     "ask": []

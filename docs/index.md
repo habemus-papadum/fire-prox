@@ -13,12 +13,5 @@ Fire-Prox is a schemaless, state-aware proxy library for Google Cloud Firestore 
 
 **Key Philosophy**: Fire-Prox is an "anti-ODM" for the prototyping stage, wrapping (not replacing) the official `google-cloud-firestore` library to provide a higher-level abstraction optimized for developer velocity during rapid iteration.
 
-## Guides
-
-- [Architectural Blueprint](Architectural_Blueprint.md)
-- ### Implementation Log
-  - #### Humans(HUMANS.md)
-  - #### Phase 1(PHASE1_IMPLEMENTATION_SUMMARY.md)
-
 ----------------
 
