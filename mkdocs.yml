@@ -11,7 +11,11 @@ theme:
 
 nav:
   - Home: index.md
+  - Demos:
+    - Phase 1 Demo Sync: phase1_demo_sync.ipynb
+    - Phase 1 Demo Async: phase1_demo_async.ipynb
   - Architecture: Architectural_Blueprint.md
+  - Implementation Log: Implementation_Log.md
   - API: reference.md
 
 
@@ -21,6 +25,7 @@ docs_dir: docs
 # Plugins to enable
 plugins:
   - search
+  - mkdocs-jupyter
   - mkdocstrings:
       default_handler: python
       handlers:
