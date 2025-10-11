@@ -37,7 +37,7 @@ class FireObject:
         user = collection.new()
         user.name = 'Ada Lovelace'
         user.year = 1815
-        await user.save()  # Transitions to LOADED
+        user.save()  # Transitions to LOADED
 
         # Load existing document (ATTACHED -> LOADED on access)
         user = db.doc('users/alovelace')  # ATTACHED state
@@ -45,10 +45,10 @@ class FireObject:
 
         # Update and save
         user.year = 1816  # Marks as dirty
-        await user.save()  # Performs partial update
+        user.save()  # Performs partial update
 
         # Delete
-        await user.delete()  # Transitions to DELETED
+        user.delete()  # Transitions to DELETED
     """
 
     # Class-level constants for internal attribute names to avoid conflicts
@@ -104,7 +104,7 @@ class FireObject:
             if user.state == State.LOADED:
                 print("Data is loaded")
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._state
 
     def is_detached(self) -> bool:
         """
@@ -114,7 +114,7 @@ class FireObject:
             True if the object has no Firestore reference and exists only
             in memory. False otherwise.
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._state == State.DETACHED
 
     def is_attached(self) -> bool:
         """
@@ -124,7 +124,7 @@ class FireObject:
             True if the object is in ATTACHED, LOADED, or DELETED state
             (i.e., has a DocumentReference). False if DETACHED.
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._doc_ref is not None
 
     def is_loaded(self) -> bool:
         """
@@ -134,7 +134,7 @@ class FireObject:
             True if the object is in LOADED state with data cached locally.
             False otherwise.
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._state == State.LOADED
 
     def is_dirty(self) -> bool:
         """
@@ -148,7 +148,10 @@ class FireObject:
             DETACHED objects are always considered dirty as all their data
             is new and unsaved.
         """
-        raise NotImplementedError("Phase 1 stub")
+        # DETACHED objects are always dirty (all data is unsaved)
+        if self._state == State.DETACHED:
+            return True
+        return self._dirty
 
     def is_deleted(self) -> bool:
         """
@@ -161,7 +164,7 @@ class FireObject:
             DELETED objects cannot be modified or saved. Attempting to do so
             should raise an appropriate exception.
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._state == State.DELETED
 
     @property
     def id(self) -> Optional[str]:
@@ -176,7 +179,7 @@ class FireObject:
             user = db.doc('users/alovelace')
             print(user.id)  # 'alovelace'
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._doc_ref.id if self._doc_ref else None
 
     @property
     def path(self) -> Optional[str]:
@@ -191,7 +194,7 @@ class FireObject:
             user = db.doc('users/alovelace')
             print(user.path)  # 'users/alovelace'
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._doc_ref.path if self._doc_ref else None
 
     # =========================================================================
     # Dynamic Attribute Handling (Python Data Model)
@@ -225,7 +228,25 @@ class FireObject:
             name = user.name  # Triggers fetch, transitions to LOADED
             year = user.year  # No fetch needed, already LOADED
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Check if we're accessing internal data
+        if name == '_data':
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+        # If we're in ATTACHED state, trigger lazy loading
+        if self._state == State.ATTACHED:
+            # Synchronous fetch for lazy loading - we'll need to handle this
+            # For now, raise an informative error
+            raise AttributeError(
+                f"Cannot access attribute '{name}' on ATTACHED FireObject. "
+                f"Call fetch() first to load data from Firestore."
+            )
+
+        # Check if attribute exists in _data
+        if name in self._data:
+            return self._data[name]
+
+        # Attribute not found
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name: str, value: Any) -> None:
         """
@@ -254,7 +275,23 @@ class FireObject:
             user.name = 'Ada Lovelace'  # Stored in _data, marks dirty
             user.year = 1815  # Also stored in _data
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Handle internal attributes
+        if name in self._INTERNAL_ATTRS:
+            object.__setattr__(self, name, value)
+            return
+
+        # Check if we're trying to modify a DELETED object
+        if hasattr(self, '_state') and self._state == State.DELETED:
+            raise AttributeError("Cannot modify a DELETED FireObject")
+
+        # Store in _data and mark as dirty
+        if not hasattr(self, '_data'):
+            # During initialization, use object.__setattr__
+            object.__setattr__(self, name, value)
+        else:
+            self._data[name] = value
+            # Mark as dirty
+            object.__setattr__(self, '_dirty', True)
 
     def __delattr__(self, name: str) -> None:
         """
@@ -279,15 +316,25 @@ class FireObject:
         Example:
             user = db.doc('users/alovelace')
             del user.nickname  # Removes field, marks for deletion on save
-            await user.save()  # Field removed from Firestore
+            user.save()  # Field removed from Firestore
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Check if we're trying to modify a DELETED object
+        if self._state == State.DELETED:
+            raise AttributeError("Cannot delete attributes from a DELETED FireObject")
+
+        # Check if attribute exists in _data
+        if name not in self._data:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+        # Remove from _data and mark as dirty
+        del self._data[name]
+        object.__setattr__(self, '_dirty', True)
 
     # =========================================================================
     # Core Lifecycle Methods
     # =========================================================================
 
-    async def fetch(self, force: bool = False) -> 'FireObject':
+    def fetch(self, force: bool = False) -> 'FireObject':
         """
         Fetch document data from Firestore.
 
@@ -320,13 +367,40 @@ class FireObject:
 
         Example:
             user = db.doc('users/alovelace')  # ATTACHED
-            await user.fetch()  # Now LOADED with data
+            user.fetch()  # Now LOADED with data
             # ... make external changes in Firestore ...
-            await user.fetch(force=True)  # Refresh data
+            user.fetch(force=True)  # Refresh data
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Validate state
+        if self._state == State.DETACHED:
+            raise ValueError("Cannot fetch() on a DETACHED FireObject (no DocumentReference)")
 
-    async def save(self, doc_id: Optional[str] = None) -> 'FireObject':
+        if self._state == State.DELETED:
+            raise RuntimeError("Cannot fetch() on a DELETED FireObject")
+
+        # Skip fetch if already LOADED and not forcing
+        if self._state == State.LOADED and not force:
+            return self
+
+        # Fetch from Firestore
+        snapshot = self._doc_ref.get()
+
+        if not snapshot.exists:
+            from google.cloud.exceptions import NotFound
+            raise NotFound(f"Document {self._doc_ref.path} does not exist")
+
+        # Populate _data with document fields
+        object.__setattr__(self, '_data', snapshot.to_dict() or {})
+
+        # Update state to LOADED
+        object.__setattr__(self, '_state', State.LOADED)
+
+        # Clear dirty flag (data now matches Firestore)
+        object.__setattr__(self, '_dirty', False)
+
+        return self
+
+    def save(self, doc_id: Optional[str] = None) -> 'FireObject':
         """
         Save the object's data to Firestore.
 
@@ -366,15 +440,65 @@ class FireObject:
             # Create new document
             user = collection.new()
             user.name = 'Ada'
-            await user.save(doc_id='alovelace')  # DETACHED -> LOADED
+            user.save(doc_id='alovelace')  # DETACHED -> LOADED
 
             # Update existing
             user.year = 1816
-            await user.save()  # Performs update
+            user.save()  # Performs update
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Check if we're trying to save a DELETED object
+        if self._state == State.DELETED:
+            raise RuntimeError("Cannot save() a DELETED FireObject")
 
-    async def delete(self) -> None:
+        # Handle DETACHED state - create new document
+        if self._state == State.DETACHED:
+            if not self._parent_collection:
+                raise ValueError("DETACHED object has no parent collection")
+
+            # Get the collection reference
+            collection_ref = self._parent_collection._collection_ref
+
+            # Create document reference (with custom ID or auto-generated)
+            if doc_id:
+                doc_ref = collection_ref.document(doc_id)
+            else:
+                doc_ref = collection_ref.document()
+
+            # Save data to Firestore
+            doc_ref.set(self._data)
+
+            # Update internal state
+            object.__setattr__(self, '_doc_ref', doc_ref)
+            object.__setattr__(self, '_state', State.LOADED)
+            object.__setattr__(self, '_dirty', False)
+
+            return self
+
+        # Handle LOADED state - update if dirty
+        if self._state == State.LOADED:
+            # Skip if not dirty
+            if not self._dirty:
+                return self
+
+            # Perform full overwrite (Phase 1)
+            self._doc_ref.set(self._data)
+
+            # Clear dirty flag
+            object.__setattr__(self, '_dirty', False)
+
+            return self
+
+        # Handle ATTACHED state - need to load first or create
+        if self._state == State.ATTACHED:
+            # For ATTACHED, we can just do a set operation
+            self._doc_ref.set(self._data)
+            object.__setattr__(self, '_state', State.LOADED)
+            object.__setattr__(self, '_dirty', False)
+            return self
+
+        return self
+
+    def delete(self) -> None:
         """
         Delete the document from Firestore.
 
@@ -397,11 +521,24 @@ class FireObject:
 
         Example:
             user = db.doc('users/alovelace')
-            await user.delete()  # Document removed from Firestore
+            user.delete()  # Document removed from Firestore
             print(user.state)  # State.DELETED
             print(user.id)  # Still accessible: 'alovelace'
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Check if we're trying to delete a DETACHED object
+        if self._state == State.DETACHED:
+            raise ValueError("Cannot delete() a DETACHED FireObject (no DocumentReference)")
+
+        # Check if already deleted
+        if self._state == State.DELETED:
+            raise RuntimeError("Cannot delete() an already-DELETED FireObject")
+
+        # Delete from Firestore
+        self._doc_ref.delete()
+
+        # Update state to DELETED (retain _doc_ref for ID/path access)
+        object.__setattr__(self, '_state', State.DELETED)
+
 
     # =========================================================================
     # Factory Methods
@@ -452,7 +589,24 @@ class FireObject:
             snap = client.document('users/alovelace').get()
             user = FireObject.from_snapshot(snap)
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Check if snapshot exists
+        if not snapshot.exists:
+            raise ValueError(f"Cannot create FireObject from non-existent snapshot")
+
+        # Create FireObject in LOADED state
+        obj = cls(
+            doc_ref=snapshot.reference,
+            initial_state=State.LOADED,
+            parent_collection=parent_collection
+        )
+
+        # Populate data from snapshot
+        object.__setattr__(obj, '_data', snapshot.to_dict() or {})
+
+        # Not dirty since we just loaded from Firestore
+        object.__setattr__(obj, '_dirty', False)
+
+        return obj
 
     # =========================================================================
     # Special Methods
@@ -468,7 +622,8 @@ class FireObject:
         Example:
             <FireObject state=LOADED path='users/alovelace' dirty=False>
         """
-        raise NotImplementedError("Phase 1 stub")
+        path_str = self.path if self.path else '<detached>'
+        return f"<FireObject state={self._state.name} path='{path_str}' dirty={self._dirty}>"
 
     def __str__(self) -> str:
         """
@@ -481,7 +636,8 @@ class FireObject:
             'FireObject(users/alovelace)'
             'FireObject(<detached>)'
         """
-        raise NotImplementedError("Phase 1 stub")
+        path_str = self.path if self.path else '<detached>'
+        return f"FireObject({path_str})"
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -495,8 +651,12 @@ class FireObject:
 
         Example:
             user = db.doc('users/alovelace')
-            await user.fetch()
+            user.fetch()
             data = user.to_dict()
             # {'name': 'Ada Lovelace', 'year': 1815}
         """
-        raise NotImplementedError("Phase 1 stub")
+        if self._state == State.ATTACHED:
+            raise RuntimeError("Cannot call to_dict() on ATTACHED FireObject. Call fetch() first.")
+
+        # Return a shallow copy
+        return dict(self._data)

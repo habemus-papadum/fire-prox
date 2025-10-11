@@ -2,9 +2,16 @@ import os
 from contextlib import contextmanager
 from typing import Iterator, Optional
 
+import google.cloud.firestore as firestore
 import requests
 
 DEFAULT_PROJECT_ID = "fire-prox-testing"
+
+def testing_client():
+    """Create a Firestore client configured to connect to the emulator."""
+    return firestore.Client(
+        project=DEFAULT_PROJECT_ID,
+    )
 
 
 class FirestoreProjectCleanupError(RuntimeError):

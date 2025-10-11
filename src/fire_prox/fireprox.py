@@ -45,15 +45,15 @@ class FireProx:
         new_user = users.new()
         new_user.name = 'Charles Babbage'
         new_user.year = 1791
-        await new_user.save()
+        new_user.save()
 
         # Update a document
         user = db.doc('users/alovelace')
         user.year = 1816
-        await user.save()
+        user.save()
 
         # Delete a document
-        await user.delete()
+        user.delete()
     """
 
     def __init__(self, client: FirestoreClient):
@@ -87,7 +87,10 @@ class FireProx:
             # Initialize FireProx
             db = FireProx(native_client)
         """
-        raise NotImplementedError("Phase 1 stub")
+        if not isinstance(client, FirestoreClient):
+            raise TypeError(f"client must be a google.cloud.firestore.Client, got {type(client)}")
+
+        self._client = client
 
     # =========================================================================
     # Document Access
@@ -129,7 +132,18 @@ class FireProx:
             # Lazy loading
             print(user.name)  # Triggers fetch on first access
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Validate path
+        self._validate_path(path, 'document')
+
+        # Create document reference
+        doc_ref = self._client.document(path)
+
+        # Return FireObject in ATTACHED state
+        return FireObject(
+            doc_ref=doc_ref,
+            initial_state=State.ATTACHED,
+            parent_collection=None
+        )
 
     def document(self, path: str) -> FireObject:
         """
@@ -144,7 +158,7 @@ class FireProx:
         Returns:
             A FireObject instance in ATTACHED state.
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self.doc(path)
 
     # =========================================================================
     # Collection Access
@@ -179,15 +193,25 @@ class FireProx:
             users = db.collection('users')
             new_user = users.new()
             new_user.name = 'Ada'
-            await new_user.save()
+            new_user.save()
 
             # Subcollection
             posts = db.collection('users/alovelace/posts')
             new_post = posts.new()
             new_post.title = 'Analysis Engine'
-            await new_post.save()
+            new_post.save()
         """
-        raise NotImplementedError("Phase 1 stub")
+        # Validate path
+        self._validate_path(path, 'collection')
+
+        # Create collection reference
+        collection_ref = self._client.collection(path)
+
+        # Return FireCollection
+        return FireCollection(
+            collection_ref=collection_ref,
+            client=self
+        )
 
     # =========================================================================
     # Client Access
@@ -221,7 +245,7 @@ class FireProx:
             transaction = db.native_client.transaction()
             # ... perform transactional operations ...
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._client
 
     @property
     def client(self) -> FirestoreClient:
@@ -233,7 +257,7 @@ class FireProx:
         Returns:
             The google.cloud.firestore.Client instance.
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._client
 
     # =========================================================================
     # Batch Operations (Phase 2+)
@@ -258,7 +282,7 @@ class FireProx:
             user2 = db.doc('users/user2')
             batch.delete(user2)
 
-            await batch.commit()
+            batch.commit()
         """
         raise NotImplementedError("Phase 2+ feature - batch operations")
 
@@ -274,15 +298,15 @@ class FireProx:
 
         Example:
             @db.transactional
-            async def transfer_credits(from_user, to_user, amount):
+            def transfer_credits(from_user, to_user, amount):
                 from_doc = db.doc(f'users/{from_user}')
                 to_doc = db.doc(f'users/{to_user}')
 
                 from_doc.credits -= amount
                 to_doc.credits += amount
 
-                await from_doc.save()
-                await to_doc.save()
+                from_doc.save()
+                to_doc.save()
         """
         raise NotImplementedError("Phase 2+ feature - transactions")
 
@@ -312,7 +336,28 @@ class FireProx:
             - Segments cannot contain certain characters (/, etc.)
             - Total path length cannot exceed limits
         """
-        raise NotImplementedError("Phase 1 stub")
+        if not path:
+            raise ValueError(f"Path cannot be empty for {path_type}")
+
+        # Split path into segments
+        segments = path.split('/')
+
+        # Check for empty segments
+        if any(not segment for segment in segments):
+            raise ValueError(f"Path cannot contain empty segments: '{path}'")
+
+        # Validate segment count based on type
+        num_segments = len(segments)
+        if path_type == 'document':
+            if num_segments % 2 != 0:
+                raise ValueError(
+                    f"Document path must have even number of segments, got {num_segments}: '{path}'"
+                )
+        elif path_type == 'collection':
+            if num_segments % 2 != 1:
+                raise ValueError(
+                    f"Collection path must have odd number of segments, got {num_segments}: '{path}'"
+                )
 
     # =========================================================================
     # Special Methods
@@ -328,7 +373,8 @@ class FireProx:
         Example:
             <FireProx project='my-project' database='(default)'>
         """
-        raise NotImplementedError("Phase 1 stub")
+        project = getattr(self._client, 'project', 'unknown')
+        return f"<FireProx project='{project}' database='(default)'>"
 
     def __str__(self) -> str:
         """
@@ -340,4 +386,5 @@ class FireProx:
         Example:
             'FireProx(my-project)'
         """
-        raise NotImplementedError("Phase 1 stub")
+        project = getattr(self._client, 'project', 'unknown')
+        return f"FireProx({project})"

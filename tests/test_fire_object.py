@@ -253,39 +253,28 @@ class TestFireObjectDynamicAttributes:
 class TestFireObjectFetchMethod:
     """Test suite for FireObject fetch() method."""
 
-    @pytest.mark.asyncio
-    async def test_fetch_method_exists(self):
+    def test_fetch_method_exists(self):
         """Test that FireObject has fetch() method."""
         obj = FireObject()
         assert hasattr(obj, 'fetch')
         assert callable(obj.fetch)
 
-    @pytest.mark.asyncio
-    async def test_fetch_is_async(self):
-        """Test that fetch() is an async method."""
-        obj = FireObject()
-        import inspect
-        assert inspect.iscoroutinefunction(obj.fetch)
-
-    @pytest.mark.asyncio
-    async def test_fetch_on_detached_raises_valueerror(self):
+    def test_fetch_on_detached_raises_valueerror(self):
         """Test that fetch() on DETACHED object raises ValueError."""
         obj = FireObject()
         # with pytest.raises(ValueError):
-        #     await obj.fetch()
+        #     obj.fetch()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_fetch_on_deleted_raises_runtimeerror(self):
+    def test_fetch_on_deleted_raises_runtimeerror(self):
         """Test that fetch() on DELETED object raises RuntimeError."""
         mock_doc_ref = Mock(spec=DocumentReference)
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.DELETED)
         # with pytest.raises(RuntimeError):
-        #     await obj.fetch()
+        #     obj.fetch()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_fetch_transitions_attached_to_loaded(self):
+    def test_fetch_transitions_attached_to_loaded(self):
         """Test that fetch() transitions ATTACHED to LOADED state."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_snapshot = Mock(spec=DocumentSnapshot)
@@ -294,13 +283,12 @@ class TestFireObjectFetchMethod:
         mock_doc_ref.get = AsyncMock(return_value=mock_snapshot)
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.ATTACHED)
-        # await obj.fetch()
+        # obj.fetch()
         # assert obj.state == State.LOADED
         # assert obj._data == {'name': 'Ada', 'year': 1815}
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_fetch_populates_data_cache(self):
+    def test_fetch_populates_data_cache(self):
         """Test that fetch() populates _data with document fields."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_snapshot = Mock(spec=DocumentSnapshot)
@@ -309,13 +297,12 @@ class TestFireObjectFetchMethod:
         mock_doc_ref.get = AsyncMock(return_value=mock_snapshot)
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.ATTACHED)
-        # await obj.fetch()
+        # obj.fetch()
         # assert 'name' in obj._data
         # assert obj._data['name'] == 'Ada'
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_fetch_clears_dirty_flag(self):
+    def test_fetch_clears_dirty_flag(self):
         """Test that fetch() clears the dirty flag."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_snapshot = Mock(spec=DocumentSnapshot)
@@ -325,12 +312,11 @@ class TestFireObjectFetchMethod:
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
         # obj._dirty = True
-        # await obj.fetch(force=True)
+        # obj.fetch(force=True)
         # assert obj._dirty == False
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_fetch_with_force_true_refreshes_loaded_object(self):
+    def test_fetch_with_force_true_refreshes_loaded_object(self):
         """Test that fetch(force=True) refreshes already-LOADED object."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_snapshot = Mock(spec=DocumentSnapshot)
@@ -339,12 +325,11 @@ class TestFireObjectFetchMethod:
         mock_doc_ref.get = AsyncMock(return_value=mock_snapshot)
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
-        # await obj.fetch(force=True)
+        # obj.fetch(force=True)
         # assert obj._data['name'] == 'Updated'
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_fetch_returns_self_for_chaining(self):
+    def test_fetch_returns_self_for_chaining(self):
         """Test that fetch() returns self to allow method chaining."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_snapshot = Mock(spec=DocumentSnapshot)
@@ -353,7 +338,7 @@ class TestFireObjectFetchMethod:
         mock_doc_ref.get = AsyncMock(return_value=mock_snapshot)
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.ATTACHED)
-        # result = await obj.fetch()
+        # result = obj.fetch()
         # assert result is obj
         assert True  # Placeholder for stub
 
@@ -361,31 +346,21 @@ class TestFireObjectFetchMethod:
 class TestFireObjectSaveMethod:
     """Test suite for FireObject save() method."""
 
-    @pytest.mark.asyncio
-    async def test_save_method_exists(self):
+    def test_save_method_exists(self):
         """Test that FireObject has save() method."""
         obj = FireObject()
         assert hasattr(obj, 'save')
         assert callable(obj.save)
 
-    @pytest.mark.asyncio
-    async def test_save_is_async(self):
-        """Test that save() is an async method."""
-        obj = FireObject()
-        import inspect
-        assert inspect.iscoroutinefunction(obj.save)
-
-    @pytest.mark.asyncio
-    async def test_save_on_deleted_raises_runtimeerror(self):
+    def test_save_on_deleted_raises_runtimeerror(self):
         """Test that save() on DELETED object raises RuntimeError."""
         mock_doc_ref = Mock(spec=DocumentReference)
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.DELETED)
         # with pytest.raises(RuntimeError):
-        #     await obj.save()
+        #     obj.save()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_save_on_detached_creates_new_document_with_auto_id(self):
+    def test_save_on_detached_creates_new_document_with_auto_id(self):
         """Test that save() on DETACHED creates document with auto-generated ID."""
         mock_collection = Mock()
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -394,13 +369,12 @@ class TestFireObjectSaveMethod:
 
         obj = FireObject(parent_collection=mock_collection)
         # obj.name = 'Ada'
-        # await obj.save()
+        # obj.save()
         # Should call collection.document().set()
         # Should transition to LOADED state
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_save_on_detached_creates_new_document_with_custom_id(self):
+    def test_save_on_detached_creates_new_document_with_custom_id(self):
         """Test that save() on DETACHED creates document with custom ID."""
         mock_collection = Mock()
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -409,12 +383,11 @@ class TestFireObjectSaveMethod:
 
         obj = FireObject(parent_collection=mock_collection)
         # obj.name = 'Ada'
-        # await obj.save(doc_id='alovelace')
+        # obj.save(doc_id='alovelace')
         # Should call collection.document('alovelace').set()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_save_on_detached_transitions_to_loaded(self):
+    def test_save_on_detached_transitions_to_loaded(self):
         """Test that save() on DETACHED transitions to LOADED."""
         mock_collection = Mock()
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -422,13 +395,12 @@ class TestFireObjectSaveMethod:
         mock_collection._collection_ref.document.return_value = mock_doc_ref
 
         obj = FireObject(parent_collection=mock_collection)
-        # await obj.save()
+        # obj.save()
         # assert obj.state == State.LOADED
         # assert obj._doc_ref is not None
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_save_on_loaded_performs_full_overwrite_phase1(self):
+    def test_save_on_loaded_performs_full_overwrite_phase1(self):
         """Test that save() on LOADED performs full overwrite (Phase 1)."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.set = AsyncMock()
@@ -436,36 +408,33 @@ class TestFireObjectSaveMethod:
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
         # obj.name = 'Ada'
         # obj._dirty = True
-        # await obj.save()
+        # obj.save()
         # mock_doc_ref.set.assert_called_once()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_save_on_clean_loaded_object_is_noop(self):
+    def test_save_on_clean_loaded_object_is_noop(self):
         """Test that save() on clean LOADED object does nothing."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.set = AsyncMock()
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
         # obj._dirty = False
-        # await obj.save()
+        # obj.save()
         # mock_doc_ref.set.assert_not_called()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_save_clears_dirty_flag(self):
+    def test_save_clears_dirty_flag(self):
         """Test that save() clears the dirty flag after successful save."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.set = AsyncMock()
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
         # obj._dirty = True
-        # await obj.save()
+        # obj.save()
         # assert obj._dirty == False
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_save_returns_self_for_chaining(self):
+    def test_save_returns_self_for_chaining(self):
         """Test that save() returns self to allow method chaining."""
         mock_collection = Mock()
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -473,7 +442,7 @@ class TestFireObjectSaveMethod:
         mock_collection._collection_ref.document.return_value = mock_doc_ref
 
         obj = FireObject(parent_collection=mock_collection)
-        # result = await obj.save()
+        # result = obj.save()
         # assert result is obj
         assert True  # Placeholder for stub
 
@@ -481,79 +450,65 @@ class TestFireObjectSaveMethod:
 class TestFireObjectDeleteMethod:
     """Test suite for FireObject delete() method."""
 
-    @pytest.mark.asyncio
-    async def test_delete_method_exists(self):
+    def test_delete_method_exists(self):
         """Test that FireObject has delete() method."""
         obj = FireObject()
         assert hasattr(obj, 'delete')
         assert callable(obj.delete)
 
-    @pytest.mark.asyncio
-    async def test_delete_is_async(self):
-        """Test that delete() is an async method."""
-        obj = FireObject()
-        import inspect
-        assert inspect.iscoroutinefunction(obj.delete)
-
-    @pytest.mark.asyncio
-    async def test_delete_on_detached_raises_valueerror(self):
+    def test_delete_on_detached_raises_valueerror(self):
         """Test that delete() on DETACHED object raises ValueError."""
         obj = FireObject()
         # with pytest.raises(ValueError):
-        #     await obj.delete()
+        #     obj.delete()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_delete_on_deleted_raises_runtimeerror(self):
+    def test_delete_on_deleted_raises_runtimeerror(self):
         """Test that delete() on DELETED object raises RuntimeError."""
         mock_doc_ref = Mock(spec=DocumentReference)
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.DELETED)
         # with pytest.raises(RuntimeError):
-        #     await obj.delete()
+        #     obj.delete()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_delete_on_attached_transitions_to_deleted(self):
+    def test_delete_on_attached_transitions_to_deleted(self):
         """Test that delete() on ATTACHED transitions to DELETED."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.delete = AsyncMock()
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.ATTACHED)
-        # await obj.delete()
+        # obj.delete()
         # assert obj.state == State.DELETED
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_delete_on_loaded_transitions_to_deleted(self):
+    def test_delete_on_loaded_transitions_to_deleted(self):
         """Test that delete() on LOADED transitions to DELETED."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.delete = AsyncMock()
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
-        # await obj.delete()
+        # obj.delete()
         # assert obj.state == State.DELETED
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_delete_calls_native_delete(self):
+    def test_delete_calls_native_delete(self):
         """Test that delete() calls DocumentReference.delete()."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.delete = AsyncMock()
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
-        # await obj.delete()
+        # obj.delete()
         # mock_doc_ref.delete.assert_called_once()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_delete_retains_doc_ref_for_id_access(self):
+    def test_delete_retains_doc_ref_for_id_access(self):
         """Test that delete() retains _doc_ref so ID/path are still accessible."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.id = 'test_id'
         mock_doc_ref.delete = AsyncMock()
 
         obj = FireObject(doc_ref=mock_doc_ref, initial_state=State.LOADED)
-        # await obj.delete()
+        # obj.delete()
         # assert obj._doc_ref is not None
         # assert obj.id == 'test_id'
         assert True  # Placeholder for stub
@@ -715,8 +670,7 @@ class TestFireObjectDocumentation:
 class TestFireObjectLazyLoading:
     """Test suite for FireObject lazy loading behavior."""
 
-    @pytest.mark.asyncio
-    async def test_getattr_on_attached_triggers_fetch(self):
+    def test_getattr_on_attached_triggers_fetch(self):
         """Test that accessing attribute on ATTACHED triggers automatic fetch."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_snapshot = Mock(spec=DocumentSnapshot)
@@ -730,8 +684,7 @@ class TestFireObjectLazyLoading:
         # assert name == 'Ada'
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_getattr_on_loaded_does_not_refetch(self):
+    def test_getattr_on_loaded_does_not_refetch(self):
         """Test that accessing attribute on LOADED doesn't trigger fetch."""
         mock_doc_ref = Mock(spec=DocumentReference)
         mock_doc_ref.get = AsyncMock()

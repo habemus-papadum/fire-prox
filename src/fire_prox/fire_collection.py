@@ -6,7 +6,7 @@ collection and provides methods for creating new documents and querying
 existing ones.
 """
 
-from typing import Optional, AsyncIterator, Any
+from typing import Optional, Iterator, Any
 from google.cloud.firestore_v1.collection import CollectionReference
 from .fire_object import FireObject
 from .state import State
@@ -33,16 +33,16 @@ class FireCollection:
         new_user = users.new()
         new_user.name = 'Ada Lovelace'
         new_user.year = 1815
-        await new_user.save()
+        new_user.save()
 
         # Create with explicit ID
         user = users.new()
         user.name = 'Charles Babbage'
-        await user.save(doc_id='cbabbage')
+        user.save(doc_id='cbabbage')
 
         # Phase 2: Query the collection
         query = users.where('year', '>', 1800).limit(10)
-        async for user in await query.get():
+        for user in query.get():
             print(user.name)
     """
 
@@ -96,9 +96,13 @@ class FireCollection:
             user = users.new()  # DETACHED state
             user.name = 'Ada Lovelace'
             user.year = 1815
-            await user.save(doc_id='alovelace')  # Now LOADED
+            user.save(doc_id='alovelace')  # Now LOADED
         """
-        raise NotImplementedError("Phase 1 stub")
+        return FireObject(
+            doc_ref=None,
+            initial_state=State.DETACHED,
+            parent_collection=self
+        )
 
     def doc(self, doc_id: str) -> FireObject:
         """
@@ -125,7 +129,12 @@ class FireCollection:
             user = users.doc('alovelace')  # ATTACHED state
             print(user.name)  # Triggers fetch, transitions to LOADED
         """
-        raise NotImplementedError("Phase 1 stub")
+        doc_ref = self._collection_ref.document(doc_id)
+        return FireObject(
+            doc_ref=doc_ref,
+            initial_state=State.ATTACHED,
+            parent_collection=self
+        )
 
     # =========================================================================
     # Properties
@@ -146,7 +155,7 @@ class FireCollection:
             posts = user.collection('posts')
             print(posts.id)  # 'posts'
         """
-        raise NotImplementedError("Phase 1 stub")
+        return self._collection_ref.id
 
     @property
     def path(self) -> str:
@@ -163,7 +172,8 @@ class FireCollection:
             posts = db.doc('users/alovelace').collection('posts')
             print(posts.path)  # 'users/alovelace/posts'
         """
-        raise NotImplementedError("Phase 1 stub")
+        # _path is a tuple, convert to slash-separated string
+        return '/'.join(self._collection_ref._path)
 
     @property
     def parent(self) -> Optional[FireObject]:
@@ -210,7 +220,7 @@ class FireCollection:
             query = users.where('birth_year', '>', 1800)
                         .where('country', '==', 'UK')
                         .limit(10)
-            async for user in await query.get():
+            for user in query.get():
                 print(user.name)
         """
         raise NotImplementedError("Phase 2 feature - querying")
@@ -248,17 +258,17 @@ class FireCollection:
         """
         raise NotImplementedError("Phase 2 feature - querying")
 
-    async def get_all(self) -> AsyncIterator[FireObject]:
+    def get_all(self) -> Iterator[FireObject]:
         """
         Retrieve all documents in the collection.
 
-        Phase 2 feature. Returns an async iterator of all documents.
+        Phase 2 feature. Returns an iterator of all documents.
 
         Yields:
             FireObject instances in LOADED state for each document.
 
         Example:
-            async for user in users.get_all():
+            for user in users.get_all():
                 print(f"{user.name}: {user.year}")
         """
         raise NotImplementedError("Phase 2 feature - querying")
@@ -277,7 +287,7 @@ class FireCollection:
         Example:
             <FireCollection path='users'>
         """
-        raise NotImplementedError("Phase 1 stub")
+        return f"<FireCollection path='{self.path}'>"
 
     def __str__(self) -> str:
         """
@@ -289,4 +299,4 @@ class FireCollection:
         Example:
             'FireCollection(users)'
         """
-        raise NotImplementedError("Phase 1 stub")
+        return f"FireCollection({self.path})"
