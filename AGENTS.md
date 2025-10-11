@@ -82,20 +82,64 @@ uv run mkdocs build
 
 ## Architecture
 
-### Status
-Currently there is a full architectural design document at `./Architectural_Blueprint.md`, but actual development has not started. 
+### Dual API: Sync and Async
+
+**FireProx provides both synchronous and asynchronous implementations:**
+
+- **Synchronous API**: `FireProx`, `FireObject`, `FireCollection` - Wraps `firestore.Client`
+- **Asynchronous API**: `AsyncFireProx`, `AsyncFireObject`, `AsyncFireCollection` - Wraps `firestore.AsyncClient`
+
+**Base Class Architecture**: To maximize code reuse, FireProx uses base classes:
+- `BaseFireObject`: Shared state management, properties, and validation logic
+- `BaseFireCollection`: Shared collection properties and string representations
+- `BaseFireProx`: Shared path validation and client access
+
+**Development Principle**: When implementing new features, **always implement for both sync and async versions**. Use base classes for shared logic (state management, validation, properties) and implement only I/O operations separately in concrete classes.
+
+### Key Differences: Sync vs Async
+
+1. **Lazy Loading**:
+   - **Sync** (`FireObject`): ATTACHED objects automatically fetch on attribute access
+   - **Async** (`AsyncFireObject`): Requires explicit `await fetch()` (Python limitation: no async `__getattr__`)
+
+2. **Method Signatures**:
+   - Sync: `user.save()`, `user.fetch()`, `user.delete()`
+   - Async: `await user.save()`, `await user.fetch()`, `await user.delete()`
+
+### Current Status
+
+**Phase 1: Complete ✅**
+- Base class architecture implemented
+- Both sync and async implementations delivered
+- State machine (DETACHED, ATTACHED, LOADED, DELETED)
+- Basic lifecycle methods (fetch, save, delete)
+- 33 integration tests passing (16 sync + 17 async)
 
 ## Implementation Roadmap
 
 Per the architectural blueprint (`Architectural_Blueprint.md`), development follows these phases:
 
-**Phase 1** (Foundation): Core FireObject with state machine, basic lifecycle methods (fetch, delete, simple save)
+**Phase 1** (Foundation): ✅ COMPLETE
+- Core FireObject with state machine, basic lifecycle methods
+- Both sync and async implementations
+- Integration tests with real Firestore emulator
 
-**Phase 2** (Enhancement): Efficient partial updates via dirty tracking, subcollection support, query builder, snapshot hydration
+**Phase 2** (Enhancement): 🚧 NEXT
+- Efficient partial updates via field-level dirty tracking
+- Subcollection support (`.collection()` on FireObject)
+- Query builder (chainable `.where()`, `.order_by()`, `.limit()`)
+- Atomic operations (ArrayUnion, ArrayRemove, Increment)
+- **Must implement for both sync and async**
 
-**Phase 3** (Advanced): ProxiedMap/ProxiedList for nested mutation tracking, automatic translation to Firestore atomic operations (ArrayUnion, ArrayRemove)
+**Phase 3** (Advanced):
+- ProxiedMap/ProxiedList for nested mutation tracking
+- Automatic translation to Firestore atomic operations
+- **Must work with both sync and async FireObject**
 
-**Phase 4** (Polish): Firestore constraint enforcement, comprehensive documentation, error handling
+**Phase 4** (Polish):
+- Firestore constraint enforcement
+- Comprehensive documentation (both sync and async examples)
+- Error handling refinements
 
 ## Development Notes
 
@@ -138,9 +182,50 @@ State transitions occur via:
 
 ### Key Components
 
-- **FireObject** (`src/fire_prox/__init__.py`): Central proxy class with state management and dynamic attribute handling via `__getattr__`, `__setattr__`, `__delattr__`
-- **FirestoreTestHarness** (`src/fire_prox/testing/__init__.py`): Test utility for clean Firestore emulator state
-- **ProxiedMap/ProxiedList** (planned): Transparent mutation tracking for nested structures
+**Base Classes** (shared logic):
+- **BaseFireObject** (`src/fire_prox/base_fire_object.py`): State management, properties, state inspection methods
+- **BaseFireCollection** (`src/fire_prox/base_fire_collection.py`): Collection properties and string representations
+- **BaseFireProx** (`src/fire_prox/base_fireprox.py`): Path validation and client access
+
+**Synchronous API**:
+- **FireObject** (`src/fire_prox/fire_object.py`): Sync document proxy with lazy loading
+- **FireCollection** (`src/fire_prox/fire_collection.py`): Sync collection interface
+- **FireProx** (`src/fire_prox/fireprox.py`): Main entry point wrapping `firestore.Client`
+
+**Asynchronous API**:
+- **AsyncFireObject** (`src/fire_prox/async_fire_object.py`): Async document proxy (explicit fetch required)
+- **AsyncFireCollection** (`src/fire_prox/async_fire_collection.py`): Async collection interface
+- **AsyncFireProx** (`src/fire_prox/async_fireprox.py`): Main entry point wrapping `firestore.AsyncClient`
+
+**Shared Utilities**:
+- **State** (`src/fire_prox/state.py`): State enum (DETACHED, ATTACHED, LOADED, DELETED)
+- **FirestoreTestHarness** (`src/fire_prox/testing/__init__.py`): Test utility for clean emulator state
+- **ProxiedMap/ProxiedList** (Phase 3 - planned): Transparent mutation tracking for nested structures
+
+### Testing Strategy
+
+**Prefer Integration Tests Over Mocking**: FireProx testing philosophy emphasizes integration tests with a real Firestore emulator rather than mocking. This provides:
+- True end-to-end validation
+- Confidence in actual Firestore behavior
+- Detection of API changes in google-cloud-firestore
+- Realistic error scenarios
+
+**Test Coverage Requirements**:
+- **Both sync and async**: Every feature must have integration tests for both `FireObject` and `AsyncFireObject`
+- **Real emulator**: Use `firestore_test_harness` fixture, not mocks
+- **Edge cases**: Test empty documents, nested data, special characters, state transitions
+- **Error conditions**: Validate error messages and invalid state handling
+
+**When to Use Mocking**: Reserve mocking for:
+- Testing error conditions that are difficult to reproduce with emulator
+- Unit testing internal helper methods
+- Testing constraint validation before Firestore calls
+
+**Current Test Suite**:
+- 16 sync integration tests (`tests/test_integration_phase1.py`)
+- 17 async integration tests (`tests/test_integration_async.py`)
+- 180+ unit tests for components
+- All tests use real Firestore emulator
 
 ### Testing Infrastructure
 
@@ -166,6 +251,29 @@ The harness automatically:
 - Deletes all documents after test completes (teardown)
 - Uses emulator endpoint from `FIRESTORE_EMULATOR_HOST` environment variable
 
+**Writing Integration Tests for New Features**:
+```python
+# tests/test_integration_phase2.py
+import pytest
+from fire_prox import FireProx
+
+class TestPhase2Feature:
+    def test_sync_version(self, db, users_collection):
+        """Test synchronous implementation."""
+        user = users_collection.new()
+        user.name = 'Ada'
+        user.save()
+        # Test assertions...
+
+    @pytest.mark.asyncio
+    async def test_async_version(self, async_db, async_users_collection):
+        """Test asynchronous implementation."""
+        user = async_users_collection.new()
+        user.name = 'Ada'
+        await user.save()
+        # Test assertions...
+```
+
 ### Firebase Emulator Configuration
 
 Configured in `firebase.json`:
@@ -177,9 +285,11 @@ Default test project ID: `fire-prox-testing`
 
 
 
-## Reference Implementation Pattern
+## Reference Implementation Patterns
 
-When implementing FireObject methods, follow this pattern from the native API:
+When implementing features, provide both synchronous and asynchronous versions:
+
+### Synchronous Pattern
 
 ```python
 # Native API (verbose):
@@ -190,10 +300,39 @@ if doc.exists:
     data['year'] = 1816
     doc_ref.update(data)
 
-# Target Fire-Prox API (intuitive):
+# FireProx Sync API (intuitive):
 user = db.doc('users/alovelace')  # ATTACHED state
-user.year = 1816                  # Auto-fetches data, marks dirty
-await user.save()                 # Partial update of only 'year' field
+user.year = 1816                  # Auto-fetches data (lazy), marks dirty
+user.save()                       # Update to Firestore
 ```
+
+### Asynchronous Pattern
+
+```python
+# Native Async API (verbose):
+doc_ref = client.collection('users').document('alovelace')
+doc = await doc_ref.get()
+if doc.exists:
+    data = doc.to_dict()
+    data['year'] = 1816
+    await doc_ref.update(data)
+
+# FireProx Async API (intuitive):
+user = db.doc('users/alovelace')  # ATTACHED state
+await user.fetch()                # Explicit fetch (no lazy loading in async)
+user.year = 1816                  # Marks dirty
+await user.save()                 # Update to Firestore
+```
+
+### Implementation Checklist for New Features
+
+When adding a new feature:
+- [ ] Implement shared logic in base class (if applicable)
+- [ ] Implement sync version in `FireObject`/`FireCollection`/`FireProx`
+- [ ] Implement async version in `AsyncFireObject`/`AsyncFireCollection`/`AsyncFireProx`
+- [ ] Write sync integration tests in `tests/test_integration_*.py`
+- [ ] Write async integration tests in `tests/test_integration_*_async.py`
+- [ ] Update docstrings with examples for both sync and async usage
+- [ ] Verify no regression in existing tests
 
 The goal is to eliminate boilerplate while maintaining compatibility with the underlying google-cloud-firestore library for complex operations.
