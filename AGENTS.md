@@ -82,9 +82,6 @@ uv run mkdocs build
 
 ## Architecture
 
-### Always make sure to support async!
-The underlying native firestore api supports both sync and async operations, and fire-prox should support both modes as well.  
-
 ### Status
 Currently there is a full architectural design document at `./Architectural_Blueprint.md`, but actual development has not started. 
 

@@ -25,7 +25,7 @@ Example Usage:
     user = users.new()
     user.name = 'Ada Lovelace'
     user.year = 1815
-    await user.save()
+    user.save()
 
     # Read a document (lazy loading)
     user = db.doc('users/alovelace')
@@ -33,10 +33,10 @@ Example Usage:
 
     # Update a document
     user.year = 1816
-    await user.save()
+    user.save()
 
     # Delete a document
-    await user.delete()
+    user.delete()
 """
 
 from .fireprox import FireProx

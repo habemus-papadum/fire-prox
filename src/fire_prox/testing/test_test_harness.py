@@ -2,15 +2,15 @@ import os
 
 from google.cloud import firestore
 
-from fire_prox.testing import firestore_test_harness  # noqa: F401 - registered as pytest fixture
+from fire_prox.testing import (
+    firestore_test_harness,  # noqa: F401 - registered as pytest fixture
+    testing_client,
+)
 
 
 def test_fire_prox(firestore_test_harness):
     os.environ["GRPC_VERBOSITY"] = "NONE"
-    project_id = firestore_test_harness.project_id
-
-    # Initialize Firestore client (uses emulator if env var is set)
-    db = firestore.Client(project=project_id)
+    db = testing_client()
 
     # Add a document to the 'users' collection
     doc_ref = db.collection("users").document()

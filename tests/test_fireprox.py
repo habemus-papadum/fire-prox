@@ -422,8 +422,7 @@ class TestFireProxDocumentation:
 class TestFireProxIntegration:
     """Test suite for FireProx integration with other components."""
 
-    @pytest.mark.asyncio
-    async def test_full_workflow_create_document(self):
+    def test_full_workflow_create_document(self):
         """Test full workflow: create collection, new document, save."""
         mock_client = Mock(spec=FirestoreClient)
         mock_collection_ref = Mock(spec=CollectionReference)
@@ -437,11 +436,10 @@ class TestFireProxIntegration:
         # user = users.new()
         # user.name = 'Ada Lovelace'
         # user.year = 1815
-        # await user.save(doc_id='alovelace')
+        # user.save(doc_id='alovelace')
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_full_workflow_read_document(self):
+    def test_full_workflow_read_document(self):
         """Test full workflow: get document, lazy load data."""
         mock_client = Mock(spec=FirestoreClient)
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -457,8 +455,7 @@ class TestFireProxIntegration:
         # assert name == 'Ada'
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_full_workflow_update_document(self):
+    def test_full_workflow_update_document(self):
         """Test full workflow: get document, modify, save."""
         mock_client = Mock(spec=FirestoreClient)
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -472,12 +469,11 @@ class TestFireProxIntegration:
         db = FireProx(mock_client)
         # user = db.doc('users/alovelace')
         # user.year = 1816
-        # await user.save()
+        # user.save()
         # mock_doc_ref.set.assert_called()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_full_workflow_delete_document(self):
+    def test_full_workflow_delete_document(self):
         """Test full workflow: get document, delete."""
         mock_client = Mock(spec=FirestoreClient)
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -486,7 +482,7 @@ class TestFireProxIntegration:
 
         db = FireProx(mock_client)
         # user = db.doc('users/alovelace')
-        # await user.delete()
+        # user.delete()
         # mock_doc_ref.delete.assert_called_once()
         assert True  # Placeholder for stub
 

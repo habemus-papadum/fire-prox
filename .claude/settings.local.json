@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python:*)",
       "Bash(uv run:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(./test.sh:*)"
     ],
     "deny": [],
     "ask": []

@@ -295,8 +295,7 @@ class TestFireCollectionQueryMethods:
         with pytest.raises(NotImplementedError):
             collection.limit(10)
 
-    @pytest.mark.asyncio
-    async def test_get_all_raises_notimplementederror(self):
+    def test_get_all_raises_notimplementederror(self):
         """Test that get_all() raises NotImplementedError (Phase 2)."""
         mock_collection_ref = Mock(spec=CollectionReference)
         collection = FireCollection(mock_collection_ref)
@@ -372,8 +371,7 @@ class TestFireCollectionDocumentation:
 class TestFireCollectionIntegrationWithFireObject:
     """Test suite for FireCollection integration with FireObject."""
 
-    @pytest.mark.asyncio
-    async def test_new_object_can_be_saved_with_auto_id(self):
+    def test_new_object_can_be_saved_with_auto_id(self):
         """Test that object from new() can be saved with auto-generated ID."""
         mock_collection_ref = Mock(spec=CollectionReference)
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -383,12 +381,11 @@ class TestFireCollectionIntegrationWithFireObject:
         collection = FireCollection(mock_collection_ref)
         # obj = collection.new()
         # obj.name = 'Ada'
-        # await obj.save()
+        # obj.save()
         # Should call collection.document().set()
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_new_object_can_be_saved_with_custom_id(self):
+    def test_new_object_can_be_saved_with_custom_id(self):
         """Test that object from new() can be saved with custom ID."""
         mock_collection_ref = Mock(spec=CollectionReference)
         mock_doc_ref = Mock(spec=DocumentReference)
@@ -398,12 +395,11 @@ class TestFireCollectionIntegrationWithFireObject:
         collection = FireCollection(mock_collection_ref)
         # obj = collection.new()
         # obj.name = 'Ada'
-        # await obj.save(doc_id='alovelace')
+        # obj.save(doc_id='alovelace')
         # mock_collection_ref.document.assert_called_with('alovelace')
         assert True  # Placeholder for stub
 
-    @pytest.mark.asyncio
-    async def test_doc_object_triggers_lazy_load_on_access(self):
+    def test_doc_object_triggers_lazy_load_on_access(self):
         """Test that object from doc() triggers lazy load on attribute access."""
         mock_collection_ref = Mock(spec=CollectionReference)
         mock_doc_ref = Mock(spec=DocumentReference)
