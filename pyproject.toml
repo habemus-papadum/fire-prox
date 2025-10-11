@@ -1,0 +1,41 @@
+[project]
+name = "fire-prox"
+version = "0.2.0"
+description = "Fast prototyping for FireStore"
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = ["firestore", "firebase"]
+authors = [
+    { name = "Nehal Patel", email = "nehal@alum.mit.edu" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/habemus-papadum/fire-prox"
+Repository = "https://github.com/habemus-papadum/fire-prox"
+Documentation = "https://github.com/habemus-papadum/fire-prox"
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "hatch>=1.14.2",
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = [
+]
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+]
+
