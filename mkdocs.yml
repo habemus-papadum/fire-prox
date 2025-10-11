@@ -1,11 +1,13 @@
-site_name: fire-proxy
+site_name: fire-prox
 site_description: Prototyping focused acceleration layer for Firestore
 site_author: Nehal Patel
-repo_url: https://github.com/habemus-papadum/fire-proxy
-repo_name: fire-proxy
+repo_url: https://github.com/habemus-papadum/fire-prox
+repo_name: fire-prox
 
 theme:
-  name: "zettelkasten-solarized-light"
+  name: "material"
+  palette:
+    primary: blue grey
 
 nav:
   - Home: index.md
