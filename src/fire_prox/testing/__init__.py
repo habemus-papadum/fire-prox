@@ -2,7 +2,10 @@ import os
 from contextlib import contextmanager
 from typing import Iterator, Optional
 
-import requests
+try:
+    import requests
+except ModuleNotFoundError:  # pragma: no cover - optional dependency in tests
+    requests = None  # type: ignore[assignment]
 
 DEFAULT_PROJECT_ID = "fire-prox-testing"
 
@@ -20,6 +23,10 @@ def _get_emulator_host() -> str:
 
 def cleanup_firestore(project_id: str = DEFAULT_PROJECT_ID) -> None:
     """Delete all documents in the given project on the Firestore emulator."""
+    if requests is None:  # pragma: no cover - guarded by dependency check
+        raise FirestoreProjectCleanupError(
+            "The 'requests' package is required to clean up the Firestore emulator."
+        )
     emulator_host = _get_emulator_host()
     url = f"http://{emulator_host}/emulator/v1/projects/{project_id}/databases/(default)/documents"
     try:

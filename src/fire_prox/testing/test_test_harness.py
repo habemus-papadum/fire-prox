@@ -1,6 +1,8 @@
 import os
 
-from google.cloud import firestore
+import pytest
+
+firestore = pytest.importorskip("google.cloud.firestore")
 
 from fire_prox.testing import firestore_test_harness  # noqa: F401 - registered as pytest fixture
 
