@@ -1,0 +1,16 @@
+{
+  "name": "fire-prox",
+  "version": "0.2.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "firebase emulators:exec \"uv run pytest -s\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.14.0",
+  "dependencies": {
+    "firebase-tools": "^14.19.1"
+  }
+}

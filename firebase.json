@@ -5,6 +5,7 @@
     },
     "ui": {
       "enabled": true
-    }
+    }, 
+    "singleProjectMode": false
   }
 }
