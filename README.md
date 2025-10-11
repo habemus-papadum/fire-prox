@@ -36,3 +36,15 @@ pnpm test
 
 The test script automatically starts Firebase emulators and runs your tests within that environment, then cleans up afterward.
 
+### Firestore Test Harness
+
+Tests can rely on the `firestore_test_harness` pytest fixture (published in `fire_prox.testing`) to ensure the emulator database is fully deleted both before a test starts and after it finishes. The harness can also be used as a context manager when writing ad-hoc scripts:
+
+```python
+from google.cloud import firestore
+from fire_prox.testing import firestore_harness
+
+with firestore_harness() as harness:
+    client = firestore.Client(project=harness.project_id)
+    # interact with Firestore here
+```
