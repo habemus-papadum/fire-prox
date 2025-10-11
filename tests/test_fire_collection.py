@@ -300,8 +300,7 @@ class TestFireCollectionQueryMethods:
         mock_collection_ref = Mock(spec=CollectionReference)
         collection = FireCollection(mock_collection_ref)
         with pytest.raises(NotImplementedError):
-            async for _ in collection.get_all():
-                pass
+            collection.get_all()
 
 
 class TestFireCollectionSpecialMethods:
