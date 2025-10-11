@@ -1,0 +1,232 @@
+"""
+AsyncFireProx: Main entry point for async FireProx usage.
+
+This module provides the AsyncFireProx class, which serves as the primary interface
+for users to interact with Firestore asynchronously through the FireProx API.
+"""
+
+from typing import Optional
+from google.cloud.firestore import AsyncClient as AsyncFirestoreClient
+from .async_fire_object import AsyncFireObject
+from .async_fire_collection import AsyncFireCollection
+from .base_fireprox import BaseFireProx
+from .state import State
+
+
+class AsyncFireProx(BaseFireProx):
+    """
+    Main entry point for the async FireProx library.
+
+    AsyncFireProx wraps the native google-cloud-firestore AsyncClient and provides
+    a simplified, Pythonic interface for working with Firestore asynchronously.
+
+    Usage Examples:
+        # Initialize with a pre-configured native async client
+        from google.cloud import firestore
+        from fire_prox import AsyncFireProx
+
+        native_client = firestore.AsyncClient(project='my-project')
+        db = AsyncFireProx(native_client)
+
+        # Access a document (ATTACHED state)
+        user = db.doc('users/alovelace')
+        await user.fetch()
+        print(user.name)
+
+        # Create a new document
+        users = db.collection('users')
+        new_user = users.new()
+        new_user.name = 'Charles Babbage'
+        new_user.year = 1791
+        await new_user.save()
+
+        # Update a document
+        user = db.doc('users/alovelace')
+        await user.fetch()
+        user.year = 1816
+        await user.save()
+
+        # Delete a document
+        await user.delete()
+    """
+
+    def __init__(self, client: AsyncFirestoreClient):
+        """
+        Initialize AsyncFireProx with a native async Firestore client.
+
+        Args:
+            client: A configured google.cloud.firestore.AsyncClient instance.
+                   Authentication and project configuration should be handled
+                   before creating this instance.
+
+        Raises:
+            TypeError: If client is not a google.cloud.firestore.AsyncClient.
+
+        Example:
+            from google.cloud import firestore
+            from fire_prox import AsyncFireProx
+
+            # Option 1: Default credentials
+            native_client = firestore.AsyncClient()
+
+            # Option 2: Explicit project
+            native_client = firestore.AsyncClient(project='my-project-id')
+
+            # Initialize AsyncFireProx
+            db = AsyncFireProx(native_client)
+        """
+        if not isinstance(client, AsyncFirestoreClient):
+            raise TypeError(
+                f"client must be a google.cloud.firestore.AsyncClient, "
+                f"got {type(client)}"
+            )
+
+        super().__init__(client)
+
+    # =========================================================================
+    # Document Access
+    # =========================================================================
+
+    def doc(self, path: str) -> AsyncFireObject:
+        """
+        Get a reference to a document by its full path.
+
+        Creates an AsyncFireObject in ATTACHED state. No data is fetched from
+        Firestore until fetch() is called.
+
+        Args:
+            path: The full document path, e.g., 'users/alovelace' or
+                 'users/uid/posts/post123'. Must be a valid Firestore
+                 document path with an even number of segments.
+
+        Returns:
+            An AsyncFireObject instance in ATTACHED state.
+
+        Raises:
+            ValueError: If path has an odd number of segments.
+
+        Example:
+            # Root-level document
+            user = db.doc('users/alovelace')
+            await user.fetch()
+
+            # Nested document (subcollection)
+            post = db.doc('users/alovelace/posts/post123')
+            await post.fetch()
+        """
+        self._validate_path(path, 'document')
+
+        doc_ref = self._client.document(path)
+
+        return AsyncFireObject(
+            doc_ref=doc_ref,
+            initial_state=State.ATTACHED,
+            parent_collection=None
+        )
+
+    def document(self, path: str) -> AsyncFireObject:
+        """
+        Alias for doc(). Get a reference to a document by its full path.
+
+        Args:
+            path: The full document path.
+
+        Returns:
+            An AsyncFireObject instance in ATTACHED state.
+        """
+        return self.doc(path)
+
+    # =========================================================================
+    # Collection Access
+    # =========================================================================
+
+    def collection(self, path: str) -> AsyncFireCollection:
+        """
+        Get a reference to a collection by its path.
+
+        Creates an AsyncFireCollection wrapper around the native
+        AsyncCollectionReference.
+
+        Args:
+            path: The collection path, e.g., 'users' or 'users/uid/posts'.
+                 Must have an odd number of segments.
+
+        Returns:
+            An AsyncFireCollection instance.
+
+        Raises:
+            ValueError: If path has an even number of segments.
+
+        Example:
+            # Root-level collection
+            users = db.collection('users')
+            new_user = users.new()
+            new_user.name = 'Ada'
+            await new_user.save()
+
+            # Subcollection
+            posts = db.collection('users/alovelace/posts')
+            new_post = posts.new()
+            new_post.title = 'Analysis Engine'
+            await new_post.save()
+        """
+        self._validate_path(path, 'collection')
+
+        collection_ref = self._client.collection(path)
+
+        return AsyncFireCollection(
+            collection_ref=collection_ref,
+            client=self
+        )
+
+    # =========================================================================
+    # Batch Operations (Phase 2+)
+    # =========================================================================
+
+    def batch(self) -> 'AsyncFireBatch':
+        """
+        Create a batch for atomic write operations.
+
+        Phase 2+ feature.
+
+        Returns:
+            An AsyncFireBatch instance for batching operations.
+
+        Example:
+            batch = db.batch()
+            user1 = db.doc('users/user1')
+            user1.status = 'active'
+            batch.set(user1)
+
+            user2 = db.doc('users/user2')
+            batch.delete(user2)
+
+            await batch.commit()
+        """
+        raise NotImplementedError("Phase 2+ feature - batch operations")
+
+    def transaction(self) -> 'AsyncFireTransaction':
+        """
+        Create a transaction for atomic read-modify-write operations.
+
+        Phase 2+ feature.
+
+        Returns:
+            An AsyncFireTransaction instance.
+
+        Example:
+            @db.transactional
+            async def transfer_credits(from_user, to_user, amount):
+                from_doc = db.doc(f'users/{from_user}')
+                to_doc = db.doc(f'users/{to_user}')
+
+                await from_doc.fetch()
+                await to_doc.fetch()
+
+                from_doc.credits -= amount
+                to_doc.credits += amount
+
+                await from_doc.save()
+                await to_doc.save()
+        """
+        raise NotImplementedError("Phase 2+ feature - transactions")

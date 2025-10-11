@@ -8,8 +8,15 @@ import requests
 DEFAULT_PROJECT_ID = "fire-prox-testing"
 
 def testing_client():
-    """Create a Firestore client configured to connect to the emulator."""
+    """Create a synchronous Firestore client configured to connect to the emulator."""
     return firestore.Client(
+        project=DEFAULT_PROJECT_ID,
+    )
+
+
+def async_testing_client():
+    """Create an asynchronous Firestore client configured to connect to the emulator."""
+    return firestore.AsyncClient(
         project=DEFAULT_PROJECT_ID,
     )
 

@@ -6,9 +6,13 @@ instead of mocks, enabling true integration testing.
 """
 
 import pytest
-from fire_prox.testing import testing_client, firestore_test_harness  # noqa: F401
-from fire_prox import FireProx
+from fire_prox.testing import testing_client, async_testing_client, firestore_test_harness  # noqa: F401
+from fire_prox import FireProx, AsyncFireProx
 
+
+# =========================================================================
+# Synchronous Fixtures
+# =========================================================================
 
 @pytest.fixture
 def client():
@@ -48,6 +52,53 @@ def users_collection(db):
     """
     return db.collection('users')
 
+
+# =========================================================================
+# Asynchronous Fixtures
+# =========================================================================
+
+@pytest.fixture
+def async_client():
+    """
+    Provide a real async Firestore client connected to the emulator.
+
+    Returns:
+        google.cloud.firestore.AsyncClient connected to emulator.
+    """
+    return async_testing_client()
+
+
+@pytest.fixture
+def async_db(async_client, firestore_test_harness):
+    """
+    Provide an AsyncFireProx instance connected to the test emulator.
+
+    This fixture automatically cleans up the database before and after each test.
+
+    Args:
+        async_client: Real async Firestore client fixture
+        firestore_test_harness: Test harness for database cleanup
+
+    Returns:
+        AsyncFireProx instance for testing.
+    """
+    return AsyncFireProx(async_client)
+
+
+@pytest.fixture
+def async_users_collection(async_db):
+    """
+    Provide an async users collection for testing.
+
+    Returns:
+        AsyncFireCollection for 'users' collection.
+    """
+    return async_db.collection('users')
+
+
+# =========================================================================
+# Shared Fixtures
+# =========================================================================
 
 @pytest.fixture
 def sample_user_data():
