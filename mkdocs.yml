@@ -1,0 +1,28 @@
+site_name: fire-proxy
+site_description: Prototyping focused acceleration layer for Firestore
+site_author: Nehal Patel
+repo_url: https://github.com/habemus-papadum/fire-proxy
+repo_name: fire-proxy
+
+theme:
+  name: "zettelkasten-solarized-light"
+
+nav:
+  - Home: index.md
+  - Architecture: Architectural_Blueprint.md
+  - API: reference.md
+
+
+# If you'd like to specify a separate docs directory, you can do so here
+docs_dir: docs
+
+# Plugins to enable
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_submodules: true
