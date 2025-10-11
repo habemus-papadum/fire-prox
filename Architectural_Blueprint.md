@@ -236,8 +236,62 @@ native\_client \= firestore.Client(project='my-project-id')
 db \= FireProx(native\_client)
 
 \# 3\. Start using the simplified FireProx API  
-user \= db.doc('users/alovelace')  
+user \= db.doc('users/alovelace')
 print(user.name)
+
+### **B. Dual API: Synchronous and Asynchronous Support**
+
+The official google-cloud-firestore library provides two distinct client flavors: `firestore.Client` for synchronous operations and `firestore.AsyncClient` for asynchronous operations. To provide maximum flexibility, **FireProx supports both paradigms through parallel implementations**:
+
+* **Synchronous API**: `FireProx`, `FireObject`, `FireCollection` - Wraps `firestore.Client`
+* **Asynchronous API**: `AsyncFireProx`, `AsyncFireObject`, `AsyncFireCollection` - Wraps `firestore.AsyncClient`
+
+**Base Class Architecture**: To maximize code reuse and maintain consistency between the synchronous and asynchronous implementations, FireProx employs a base class pattern:
+
+* **BaseFireObject**: Contains all state management logic, property accessors (`id`, `path`, `state`), state inspection methods (`is_loaded()`, `is_dirty()`, etc.), and attribute handling helpers that are identical between sync and async versions.
+* **BaseFireCollection**: Contains shared collection properties (`id`, `path`) and string representations.
+* **BaseFireProx**: Contains shared path validation logic and client access properties.
+
+The concrete `FireObject` and `AsyncFireObject` classes inherit from `BaseFireObject` and implement only the I/O operations (`fetch()`, `save()`, `delete()`) that differ between synchronous and asynchronous execution.
+
+**Key Differences**:
+
+1. **Lazy Loading**:
+   - **Synchronous** (`FireObject`): ATTACHED objects automatically fetch data on first attribute access via `__getattr__`. This provides seamless lazy loading.
+   - **Asynchronous** (`AsyncFireObject`): Python does not support async `__getattr__`, so ATTACHED objects require an explicit `await fetch()` call before accessing attributes. Attempting to access an attribute on an ATTACHED async object raises a clear error message: `"Cannot access attribute 'name' on ATTACHED AsyncFireObject. Call await fetch() first."`
+
+2. **Method Signatures**:
+   - Synchronous: `user.save()`, `user.fetch()`, `user.delete()`
+   - Asynchronous: `await user.save()`, `await user.fetch()`, `await user.delete()`
+
+**Development Principle**: When adding new features, **always implement for both sync and async versions**. Use the base classes for any logic that can be shared (state management, validation, properties) and implement only the I/O operations separately in the concrete classes.
+
+**Example Usage**:
+
+Python (Synchronous)
+```python
+from google.cloud import firestore
+from fireprox import FireProx
+
+client = firestore.Client(project='my-project-id')
+db = FireProx(client)
+
+user = db.doc('users/alovelace')
+print(user.name)  # Lazy loads automatically
+```
+
+Python (Asynchronous)
+```python
+from google.cloud import firestore
+from fireprox import AsyncFireProx
+
+client = firestore.AsyncClient(project='my-project-id')
+db = AsyncFireProx(client)
+
+user = db.doc('users/alovelace')
+await user.fetch()  # Explicit fetch required
+print(user.name)
+```
 
 ## **VI. Architectural Blueprint and Path Forward**
 
@@ -245,19 +299,25 @@ print(user.name)
 
 The architecture can be visualized as a layered system. At the bottom is the google-cloud-firestore library, handling the low-level communication with the Firestore service. The FireProx library sits on top of this, with the FireObject as its central abstraction. Developer code interacts exclusively with FireObject and its associated components (ProxiedMap, ProxiedList, and query builders). When an action like .save() or .fetch() is called on a FireObject, it translates the request into the appropriate calls on the underlying DocumentReference or Client objects from the native library.
 
-* **Developer Code**: Interacts with FireObject, FireCollection, ProxiedMap, ProxiedList.  
-* **FireProx Layer**: Contains FireObject (manages state, \_data, \_dirty\_fields), ProxiedMap/List (track nested mutations), and Query (builds queries).  
-* **Native Library Layer**: google.cloud.firestore\_v1.Client, DocumentReference, CollectionReference, WriteBatch. FireObject calls methods on these objects to execute operations.  
+* **Developer Code**: Interacts with `FireObject`/`AsyncFireObject`, `FireCollection`/`AsyncFireCollection`, `ProxiedMap`, `ProxiedList`.
+* **FireProx Layer**:
+  * **Base Classes**: `BaseFireObject` (state management, properties), `BaseFireCollection` (collection properties), `BaseFireProx` (path validation)
+  * **Sync Implementation**: `FireObject`, `FireCollection`, `FireProx` (wraps `firestore.Client`)
+  * **Async Implementation**: `AsyncFireObject`, `AsyncFireCollection`, `AsyncFireProx` (wraps `firestore.AsyncClient`)
+  * **Shared Components**: `ProxiedMap`/`ProxiedList` (track nested mutations), `FireQuery`/`AsyncFireQuery` (build queries)
+* **Native Library Layer**:
+  * **Sync**: `google.cloud.firestore.Client`, `DocumentReference`, `CollectionReference`, `WriteBatch`
+  * **Async**: `google.cloud.firestore.AsyncClient`, `AsyncDocumentReference`, `AsyncCollectionReference`, `AsyncWriteBatch`
 * **Firestore Service**: The remote database.
 
 ### **B. Recommended Implementation Roadmap**
 
-A phased implementation is recommended to manage complexity and deliver value incrementally.
+A phased implementation is recommended to manage complexity and deliver value incrementally. **Each phase must be implemented for both synchronous and asynchronous APIs**, leveraging base classes to share common logic.
 
-* **Phase 1: The Core FireObject and State Machine.** The initial focus should be on building the FireObject class with its state management (DETACHED, ATTACHED, LOADED, DELETED). Implement the dynamic attribute handlers (\_\_getattr\_\_, \_\_setattr\_\_) and the basic lifecycle methods: fetch(), delete(), and a simple save() that performs a full overwrite (.set()). At this stage, dirty tracking will be a simple boolean flag.  
-* **Phase 2: Advanced save() Logic and Subcollections.** Enhance the save() method to use the \_dirty\_fields set to perform efficient partial updates (.update()) instead of full overwrites. Implement the .collection() method on FireObject to enable subcollection access. Build the lightweight, chainable query builder and the .from\_snapshot() hydration method.  
-* **Phase 3: Mutation Tracking Proxies.** This is the most intricate part of the implementation. Develop the ProxiedMap and ProxiedList classes, ensuring they correctly inherit from their respective ABCs and transparently proxy all methods. Implement the mechanism for these proxies to report mutations back to their parent FireObject.  
-* **Phase 4: Refinements and Documentation.** With the core functionality in place, this phase should focus on adding helper methods, improving error handling, optimizing performance, and, most importantly, writing comprehensive documentation with clear examples and API references.
+* **Phase 1: The Core FireObject and State Machine.** The initial focus should be on building the base class architecture (`BaseFireObject`, `BaseFireCollection`, `BaseFireProx`) with state management (DETACHED, ATTACHED, LOADED, DELETED). Implement the dynamic attribute handlers (\_\_getattr\_\_, \_\_setattr\_\_) and the basic lifecycle methods: fetch(), delete(), and a simple save() that performs a full overwrite (.set()). At this stage, dirty tracking will be a simple boolean flag. **Deliver both `FireObject`/`FireProx` (sync) and `AsyncFireObject`/`AsyncFireProx` (async) implementations.** All features should have integration tests for both sync and async versions using a real Firestore emulator.
+* **Phase 2: Advanced save() Logic and Subcollections.** Enhance the save() method in both sync and async versions to use the \_dirty\_fields set to perform efficient partial updates (.update()) instead of full overwrites. Implement the .collection() method on both FireObject variants to enable subcollection access. Build the lightweight, chainable query builder (both `FireQuery` and `AsyncFireQuery`) and the .from\_snapshot() hydration method. Add atomic operations (ArrayUnion, ArrayRemove, Increment) support. **Integration tests required for both sync and async implementations.**
+* **Phase 3: Mutation Tracking Proxies.** This is the most intricate part of the implementation. Develop the ProxiedMap and ProxiedList classes, ensuring they correctly inherit from their respective ABCs and transparently proxy all methods. Implement the mechanism for these proxies to report mutations back to their parent FireObject. These proxies must work correctly with both synchronous and asynchronous FireObject instances. **Test with both sync and async workflows.**
+* **Phase 4: Refinements and Documentation.** With the core functionality in place, this phase should focus on adding helper methods, improving error handling, optimizing performance, and, most importantly, writing comprehensive documentation with clear examples and API references for both synchronous and asynchronous usage patterns.
 
 ### **C. Conclusion: Empowering the Prototyper**
 
