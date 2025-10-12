@@ -6,10 +6,11 @@ Firestore Query objects and provides a chainable interface for building and
 executing queries.
 """
 
-from typing import List, Iterator, Any, Optional
+from typing import List, Iterator, Any, Optional, Dict, Tuple, Union
 from google.cloud.firestore_v1.query import Query
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .fire_object import FireObject
+from .base_fire_object import BaseFireObject
 
 
 class FireQuery:
@@ -51,7 +52,12 @@ class FireQuery:
             results = [FireObject.from_snapshot(snap) for snap in native_query.stream()]
     """
 
-    def __init__(self, native_query: Query, parent_collection: Optional[Any] = None):
+    def __init__(
+        self,
+        native_query: Query,
+        parent_collection: Optional[Any] = None,
+        selected_fields: Optional[Tuple[str, ...]] = None
+    ):
         """
         Initialize a FireQuery.
 
@@ -61,6 +67,7 @@ class FireQuery:
         """
         self._query = native_query
         self._parent_collection = parent_collection
+        self._selected_fields = selected_fields
 
     # =========================================================================
     # Query Building Methods (Immutable Pattern)
@@ -100,7 +107,7 @@ class FireQuery:
         # Create FieldFilter and add to query
         filter_obj = FieldFilter(field, op, value)
         new_query = self._query.where(filter=filter_obj)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def order_by(self, field: str, direction: str = 'ASCENDING') -> 'FireQuery':
         """
@@ -139,7 +146,7 @@ class FireQuery:
             raise ValueError(f"Invalid direction: {direction}. Must be 'ASCENDING' or 'DESCENDING'")
 
         new_query = self._query.order_by(field, direction=direction_const)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def limit(self, count: int) -> 'FireQuery':
         """
@@ -167,7 +174,7 @@ class FireQuery:
             raise ValueError(f"Limit count must be positive, got {count}")
 
         new_query = self._query.limit(count)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def start_at(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -201,7 +208,7 @@ class FireQuery:
             page2 = users.order_by('age').start_at(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_at(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def start_after(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -232,7 +239,38 @@ class FireQuery:
             page2 = users.order_by('age').start_after(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_after(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._selected_fields)
+
+    def select(self, *field_paths: str) -> 'FireQuery':
+        """Restrict the fields returned by the query to a projection."""
+
+        if not field_paths:
+            raise ValueError("select() requires at least one field path")
+
+        new_query = self._query.select(field_paths)
+        return FireQuery(
+            new_query,
+            self._parent_collection,
+            tuple(field_paths)
+        )
+
+    def _hydrate_snapshot(
+        self,
+        snapshot: Any
+    ) -> Union[FireObject, Dict[str, Any]]:
+        """Hydrate a native snapshot based on select configuration."""
+
+        if not self._selected_fields:
+            return FireObject.from_snapshot(snapshot, self._parent_collection)
+
+        data = snapshot.to_dict() or {}
+        converted: Dict[str, Any] = {}
+        for key, value in data.items():
+            converted[key] = BaseFireObject._convert_snapshot_value_for_retrieval(
+                value,
+                is_async=False
+            )
+        return converted
 
     def end_at(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -260,7 +298,7 @@ class FireQuery:
             query = users.order_by('age').end_at(target_snapshot)
         """
         new_query = self._query.end_at(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def end_before(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -288,22 +326,24 @@ class FireQuery:
             query = users.order_by('age').end_before(target_snapshot)
         """
         new_query = self._query.end_before(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._selected_fields)
 
     # =========================================================================
     # Query Execution Methods
     # =========================================================================
 
-    def get(self) -> List[FireObject]:
+    def get(self) -> List[Union[FireObject, Dict[str, Any]]]:
         """
         Execute the query and return results as a list.
 
         Fetches all matching documents and hydrates them into FireObject
-        instances in LOADED state.
+        instances (default) or vanilla dictionaries when select() is used.
 
         Returns:
-            List of FireObject instances for all documents matching the query.
-            Empty list if no documents match.
+            List of FireObject instances for all documents matching the query
+            when no projection is applied. If select() is used, returns a list
+            of dictionaries containing only the requested fields with document
+            references converted back into FireObject instances.
 
         Example:
             # Get all results as a list
@@ -320,18 +360,20 @@ class FireQuery:
         """
         # Execute query and hydrate results
         snapshots = self._query.stream()
-        return [FireObject.from_snapshot(snap, self._parent_collection) for snap in snapshots]
+        return [self._hydrate_snapshot(snap) for snap in snapshots]
 
-    def stream(self) -> Iterator[FireObject]:
+    def stream(self) -> Iterator[Union[FireObject, Dict[str, Any]]]:
         """
         Execute the query and stream results as an iterator.
 
-        Returns a generator that yields FireObject instances one at a time.
-        This is more memory-efficient than .get() for large result sets
-        as it doesn't load all results into memory at once.
+        Returns a generator that yields FireObject instances one at a time or
+        dictionaries when select() is used. This is more memory-efficient than
+        .get() for large result sets as it doesn't load all results into memory
+        at once.
 
         Yields:
-            FireObject instances in LOADED state for each matching document.
+            FireObject instances in LOADED state for each matching document, or
+            dictionaries with the projected data when select() is active.
 
         Example:
             # Stream results one at a time
@@ -348,7 +390,12 @@ class FireQuery:
         """
         # Stream results and hydrate on-the-fly
         for snapshot in self._query.stream():
-            yield FireObject.from_snapshot(snapshot, self._parent_collection)
+            yield self._hydrate_snapshot(snapshot)
+
+    def get_all(self) -> Iterator[Union[FireObject, Dict[str, Any]]]:
+        """Retrieve all results as an iterator (alias for stream)."""
+
+        return self.stream()
 
     def __repr__(self) -> str:
         """Return string representation of the query."""

@@ -211,11 +211,44 @@ class FireCollection(BaseFireCollection):
         native_query = self._collection_ref.limit(count)
         return FireQuery(native_query, parent_collection=self)
 
+    def select(self, *field_paths: str) -> 'FireQuery':
+        """
+        Create a query that projects documents to specific fields.
+
+        Args:
+            *field_paths: Field paths to include in the results.
+
+        Returns:
+            A FireQuery configured to return dictionaries containing only the
+            requested fields. Document references within the projection are
+            converted back into FireObject instances automatically.
+
+        Example:
+            query = users.select('name', 'country')
+            for user in query.stream():
+                print(user['name'])
+        """
+        from .fire_query import FireQuery
+
+        if not field_paths:
+            raise ValueError("select() requires at least one field path")
+
+        native_query = self._collection_ref.select(field_paths)
+        return FireQuery(
+            native_query,
+            parent_collection=self,
+            selected_fields=tuple(field_paths)
+        )
+
     def get_all(self) -> Iterator[FireObject]:
         """
         Retrieve all documents in the collection.
 
         Phase 2.5 feature. Returns an iterator of all documents.
+
+        Note:
+            To project documents to a subset of fields, use
+            ``collection.select(...).get_all()``.
 
         Yields:
             FireObject instances in LOADED state for each document.

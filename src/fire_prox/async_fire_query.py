@@ -6,10 +6,11 @@ Firestore AsyncQuery objects and provides a chainable interface for building and
 executing async queries.
 """
 
-from typing import List, AsyncIterator, Any, Optional
+from typing import List, AsyncIterator, Any, Optional, Dict, Tuple, Union
 from google.cloud.firestore_v1.async_query import AsyncQuery
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .async_fire_object import AsyncFireObject
+from .base_fire_object import BaseFireObject
 
 
 class AsyncFireQuery:
@@ -52,7 +53,12 @@ class AsyncFireQuery:
             results = [AsyncFireObject.from_snapshot(snap) async for snap in native_query.stream()]
     """
 
-    def __init__(self, native_query: AsyncQuery, parent_collection: Optional[Any] = None):
+    def __init__(
+        self,
+        native_query: AsyncQuery,
+        parent_collection: Optional[Any] = None,
+        selected_fields: Optional[Tuple[str, ...]] = None
+    ):
         """
         Initialize an AsyncFireQuery.
 
@@ -62,6 +68,7 @@ class AsyncFireQuery:
         """
         self._query = native_query
         self._parent_collection = parent_collection
+        self._selected_fields = selected_fields
 
     # =========================================================================
     # Query Building Methods (Immutable Pattern)
@@ -101,7 +108,7 @@ class AsyncFireQuery:
         # Create FieldFilter and add to query
         filter_obj = FieldFilter(field, op, value)
         new_query = self._query.where(filter=filter_obj)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def order_by(self, field: str, direction: str = 'ASCENDING') -> 'AsyncFireQuery':
         """
@@ -140,7 +147,7 @@ class AsyncFireQuery:
             raise ValueError(f"Invalid direction: {direction}. Must be 'ASCENDING' or 'DESCENDING'")
 
         new_query = self._query.order_by(field, direction=direction_const)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def limit(self, count: int) -> 'AsyncFireQuery':
         """
@@ -168,7 +175,7 @@ class AsyncFireQuery:
             raise ValueError(f"Limit count must be positive, got {count}")
 
         new_query = self._query.limit(count)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def start_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -202,7 +209,7 @@ class AsyncFireQuery:
             page2 = await users.order_by('age').start_at(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_at(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def start_after(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -233,7 +240,43 @@ class AsyncFireQuery:
             page2 = await users.order_by('age').start_after(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_after(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._selected_fields)
+
+    def select(self, *field_paths: str) -> 'AsyncFireQuery':
+        """Restrict the fields returned by the query to a projection."""
+
+        if not field_paths:
+            raise ValueError("select() requires at least one field path")
+
+        new_query = self._query.select(field_paths)
+        return AsyncFireQuery(
+            new_query,
+            self._parent_collection,
+            tuple(field_paths)
+        )
+
+    def _hydrate_snapshot(
+        self,
+        snapshot: Any
+    ) -> Union[AsyncFireObject, Dict[str, Any]]:
+        """Hydrate snapshot into AsyncFireObject or dictionary."""
+
+        if not self._selected_fields:
+            return AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
+
+        data = snapshot.to_dict() or {}
+        converted: Dict[str, Any] = {}
+        sync_client = None
+        if self._parent_collection is not None:
+            sync_client = getattr(self._parent_collection, '_sync_client', None)
+
+        for key, value in data.items():
+            converted[key] = BaseFireObject._convert_snapshot_value_for_retrieval(
+                value,
+                is_async=True,
+                sync_client=sync_client
+            )
+        return converted
 
     def end_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -261,7 +304,7 @@ class AsyncFireQuery:
             query = users.order_by('age').end_at(target_snapshot)
         """
         new_query = self._query.end_at(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._selected_fields)
 
     def end_before(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -289,22 +332,25 @@ class AsyncFireQuery:
             query = users.order_by('age').end_before(target_snapshot)
         """
         new_query = self._query.end_before(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._selected_fields)
 
     # =========================================================================
     # Query Execution Methods
     # =========================================================================
 
-    async def get(self) -> List[AsyncFireObject]:
+    async def get(self) -> List[Union[AsyncFireObject, Dict[str, Any]]]:
         """
         Execute the query and return results as a list.
 
         Fetches all matching documents asynchronously and hydrates them into
-        AsyncFireObject instances in LOADED state.
+        AsyncFireObject instances (default) or vanilla dictionaries when
+        select() is used.
 
         Returns:
-            List of AsyncFireObject instances for all documents matching the query.
-            Empty list if no documents match.
+            List of AsyncFireObject instances for all documents matching the
+            query when no projection is applied. If select() is used, returns a
+            list of dictionaries containing only the requested fields with
+            document references converted back into AsyncFireObject instances.
 
         Example:
             # Get all results as a list
@@ -322,20 +368,22 @@ class AsyncFireQuery:
         # Execute query and hydrate results
         results = []
         async for snapshot in self._query.stream():
-            obj = AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
-            results.append(obj)
+            results.append(self._hydrate_snapshot(snapshot))
         return results
 
-    async def stream(self) -> AsyncIterator[AsyncFireObject]:
+    async def stream(self) -> AsyncIterator[Union[AsyncFireObject, Dict[str, Any]]]:
         """
         Execute the query and stream results as an async iterator.
 
         Returns an async generator that yields AsyncFireObject instances one at
-        a time. This is more memory-efficient than .get() for large result sets
-        as it doesn't load all results into memory at once.
+        a time or dictionaries when select() is used. This is more
+        memory-efficient than .get() for large result sets as it doesn't load
+        all results into memory at once.
 
         Yields:
-            AsyncFireObject instances in LOADED state for each matching document.
+            AsyncFireObject instances in LOADED state for each matching
+            document, or dictionaries with the projected data when select() is
+            active.
 
         Example:
             # Stream results one at a time
@@ -352,7 +400,13 @@ class AsyncFireQuery:
         """
         # Stream results and hydrate on-the-fly
         async for snapshot in self._query.stream():
-            yield AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
+            yield self._hydrate_snapshot(snapshot)
+
+    async def get_all(self) -> AsyncIterator[Union[AsyncFireObject, Dict[str, Any]]]:
+        """Retrieve all results as an async iterator (alias for stream)."""
+
+        async for item in self.stream():
+            yield item
 
     def __repr__(self) -> str:
         """Return string representation of the query."""

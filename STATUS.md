@@ -43,13 +43,20 @@
 - ✅ **Sync Client Support for Async** - Async references use companion sync client for lazy loading
 - ✅ **Object Identity** - Same reference returns same FireObject instance (caching)
 
+### Phase 4 Part 2: Query Projections ✅ Complete
+
+- ✅ **Projection Builder** - `.select()` projections for sync and async queries with full chaining support
+- ✅ **Dictionary Results** - `get()`, `stream()`, and `get_all()` return vanilla dictionaries when projecting fields
+- ✅ **Reference Hydration** - Document references inside projected payloads automatically hydrate into FireProx objects
+- ✅ **Demo Coverage** - Added documentation, implementation report, and notebook topic showcasing select workflows
+
 ### Test Coverage
 
 | Category | Count | Status |
 |----------|-------|--------|
-| **Total Tests** | 388 | ✅ 100% passing |
-| **Sync Integration** | 70 | ✅ |
-| **Async Integration** | 69 | ✅ |
+| **Total Tests** | 404 | ✅ 100% passing |
+| **Sync Integration** | 74 | ✅ |
+| **Async Integration** | 73 | ✅ |
 | **Unit Tests** | 198 | ✅ |
 | **Phase 2 Integration** | 37 | ✅ |
 | **Phase 2.5 Integration** | 69 | ✅ (includes pagination) |
@@ -70,6 +77,8 @@
   - ✅ Dates and Timestamps (timezone handling)
   - ✅ **Document References** (reference relationships, lazy loading)
   - ✅ Vector Embeddings (semantic search)
+  - ✅ Select Projections (field projection workflows)
+- ✅ Phase 4 Projection Implementation Report
 
 ---
 

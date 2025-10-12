@@ -8,6 +8,7 @@ the Firestore emulator.
 import pytest
 from src.fire_prox.testing import async_testing_client
 from src.fire_prox import AsyncFireProx
+from src.fire_prox.async_fire_object import AsyncFireObject
 
 
 @pytest.fixture
@@ -510,3 +511,61 @@ class TestQueryPaginationAsync:
         assert len(page2_results) == 2
         assert page2_results[0].birth_year == 1903  # John
         assert page2_results[1].birth_year == 1815  # Ada
+
+
+class TestSelectProjection:
+    """Tests for projection support via select() in async queries."""
+
+    async def test_select_get_returns_dicts(self, async_test_collection):
+        """select().get() should return dictionaries with requested fields only."""
+
+        results = await async_test_collection.select('name', 'country').get()
+
+        assert results
+        assert all(isinstance(item, dict) for item in results)
+        assert all(set(item.keys()) == {'name', 'country'} for item in results)
+
+    async def test_select_stream_yields_dicts(self, async_test_collection):
+        """select().stream() should yield dictionaries with projections."""
+
+        stream_results = []
+        async for item in async_test_collection.select('name').stream():
+            stream_results.append(item)
+
+        assert stream_results
+        assert all(isinstance(item, dict) for item in stream_results)
+        assert all(list(item.keys()) == ['name'] for item in stream_results)
+
+    async def test_select_get_all_alias(self, async_test_collection):
+        """select().get_all() should behave like stream() for projections."""
+
+        collected = []
+        async for item in async_test_collection.select('name').get_all():
+            collected.append(item)
+
+        assert collected
+        assert all(isinstance(item, dict) for item in collected)
+
+    async def test_select_converts_references(self, async_test_collection):
+        """DocumentReference values in projections convert back to AsyncFireObjects."""
+
+        friend = async_test_collection.doc('user1')
+        ref_doc = async_test_collection.new()
+        ref_doc.name = 'Async Projection Ref Test'
+        ref_doc.friend = friend
+        await ref_doc.save(doc_id='async-projection-ref')
+
+        results = await (
+            async_test_collection
+            .where('name', '==', 'Async Projection Ref Test')
+            .select('friend')
+            .get()
+        )
+
+        assert len(results) == 1
+        projected = results[0]
+        assert isinstance(projected, dict)
+        assert 'friend' in projected
+        friend_obj = projected['friend']
+        assert isinstance(friend_obj, AsyncFireObject)
+        assert friend_obj.id == 'user1'

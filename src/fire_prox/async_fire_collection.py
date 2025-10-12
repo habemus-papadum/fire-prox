@@ -204,11 +204,44 @@ class AsyncFireCollection(BaseFireCollection):
         native_query = self._collection_ref.limit(count)
         return AsyncFireQuery(native_query, parent_collection=self)
 
+    def select(self, *field_paths: str) -> 'AsyncFireQuery':
+        """
+        Create an async query that projects documents to specific fields.
+
+        Args:
+            *field_paths: Field paths to include in the results.
+
+        Returns:
+            An AsyncFireQuery configured to return dictionaries containing only
+            the requested fields. Document references within the projection are
+            converted back into AsyncFireObject instances automatically.
+
+        Example:
+            query = users.select('name', 'country')
+            async for user in query.stream():
+                print(user['name'])
+        """
+        from .async_fire_query import AsyncFireQuery
+
+        if not field_paths:
+            raise ValueError("select() requires at least one field path")
+
+        native_query = self._collection_ref.select(field_paths)
+        return AsyncFireQuery(
+            native_query,
+            parent_collection=self,
+            selected_fields=tuple(field_paths)
+        )
+
     async def get_all(self) -> AsyncIterator[AsyncFireObject]:
         """
         Retrieve all documents in the collection.
 
         Phase 2.5 feature. Returns an async iterator of all documents.
+
+        Note:
+            To project documents to a subset of fields, use
+            ``collection.select(...).get_all()``.
 
         Yields:
             AsyncFireObject instances in LOADED state for each document.

@@ -22,6 +22,7 @@ nav:
       - Dates and Timestamps: demos/topics/dates_and_timestamps.ipynb
       - Document References: demos/topics/document_references.ipynb
       - Vector Embeddings: demos/topics/vector_embeddings.ipynb
+      - Select Projections: demos/topics/select_projections.ipynb
   - Architecture: Architectural_Blueprint.md
   - Implementation Log: Implementation_Log.md
   - API: reference.md

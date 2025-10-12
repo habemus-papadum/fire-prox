@@ -8,6 +8,7 @@ the Firestore emulator.
 import pytest
 from src.fire_prox.testing import testing_client
 from src.fire_prox import FireProx
+from src.fire_prox.fire_object import FireObject
 
 
 @pytest.fixture
@@ -501,3 +502,56 @@ class TestQueryPagination:
         assert len(page2_results) == 2
         assert page2_results[0].birth_year == 1903  # John
         assert page2_results[1].birth_year == 1815  # Ada
+
+
+class TestSelectProjection:
+    """Tests for projection support via select()."""
+
+    def test_select_get_returns_dicts(self, test_collection):
+        """select().get() should return dictionaries with requested fields only."""
+
+        results = test_collection.select('name', 'country').get()
+
+        assert results
+        assert all(isinstance(item, dict) for item in results)
+        assert all(set(item.keys()) == {'name', 'country'} for item in results)
+
+    def test_select_stream_yields_dicts(self, test_collection):
+        """select().stream() should yield dictionaries with projections."""
+
+        stream_results = list(test_collection.select('name').stream())
+
+        assert stream_results
+        assert all(isinstance(item, dict) for item in stream_results)
+        assert all(list(item.keys()) == ['name'] for item in stream_results)
+
+    def test_select_get_all_alias(self, test_collection):
+        """select().get_all() should behave like stream() for projections."""
+
+        iterator = test_collection.select('name').get_all()
+        collected = list(iterator)
+
+        assert collected
+        assert all(isinstance(item, dict) for item in collected)
+
+    def test_select_converts_references(self, test_collection):
+        """DocumentReference values in projections convert back to FireObjects."""
+
+        friend = test_collection.doc('user1')
+        ref_doc = test_collection.new()
+        ref_doc.name = 'Projection Ref Test'
+        ref_doc.friend = friend
+        ref_doc.save(doc_id='projection-ref')
+
+        results = (test_collection
+                   .where('name', '==', 'Projection Ref Test')
+                   .select('friend')
+                   .get())
+
+        assert len(results) == 1
+        projected = results[0]
+        assert isinstance(projected, dict)
+        assert 'friend' in projected
+        friend_obj = projected['friend']
+        assert isinstance(friend_obj, FireObject)
+        assert friend_obj.id == 'user1'
