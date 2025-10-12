@@ -1,8 +1,13 @@
 name: Claude Code Review
 
 on:
-  pull_request:
-    types: [opened, synchronize]
+  workflow_dispatch:
+
+  # Code be expensive, so require manual trigger for now,
+  # also it is mostly reviewing its own code, show probably use tags to avoid that
+  #
+  # pull_request:
+  #   types: [opened, synchronize]
     # Optional: Only run on specific file changes
     # paths:
     #   - "src/**/*.ts"
