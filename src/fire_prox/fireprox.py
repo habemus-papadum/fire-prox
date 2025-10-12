@@ -230,26 +230,4 @@ class FireProx(BaseFireProx):
         """
         raise NotImplementedError("Phase 2+ feature - batch operations")
 
-    def transaction(self) -> 'FireTransaction':
-        """
-        Create a transaction for atomic read-modify-write operations.
-
-        Phase 2+ feature. Provides a Pythonic wrapper around the native
-        Transaction for ensuring data consistency.
-
-        Returns:
-            A FireTransaction instance.
-
-        Example:
-            @db.transactional
-            def transfer_credits(from_user, to_user, amount):
-                from_doc = db.doc(f'users/{from_user}')
-                to_doc = db.doc(f'users/{to_user}')
-
-                from_doc.credits -= amount
-                to_doc.credits += amount
-
-                from_doc.save()
-                to_doc.save()
-        """
-        raise NotImplementedError("Phase 2+ feature - transactions")
+    # Note: transaction() method is inherited from BaseFireProx

@@ -65,6 +65,67 @@ class BaseFireProx:
         return self._client
 
     # =========================================================================
+    # Transaction Support (SHARED)
+    # =========================================================================
+
+    def transaction(self) -> Any:
+        """
+        Create a transaction for atomic read-modify-write operations.
+
+        Returns the native Firestore transaction object that can be used
+        with the @firestore.transactional decorator for synchronous operations
+        or @firestore.async_transactional for asynchronous operations.
+
+        This method provides a convenient way to create transactions without
+        manually accessing the underlying client. The returned transaction
+        object is a native Firestore Transaction that should be passed to
+        functions decorated with @firestore.transactional.
+
+        Returns:
+            A native google.cloud.firestore.Transaction or
+            google.cloud.firestore.AsyncTransaction instance.
+
+        Example (Synchronous):
+            transaction = db.transaction()
+
+            @firestore.transactional
+            def transfer_credits(transaction, from_id, to_id, amount):
+                from_user = db.doc(f'users/{from_id}')
+                to_user = db.doc(f'users/{to_id}')
+
+                from_user.fetch(transaction=transaction)
+                to_user.fetch(transaction=transaction)
+
+                from_user.credits -= amount
+                to_user.credits += amount
+
+                from_user.save(transaction=transaction)
+                to_user.save(transaction=transaction)
+
+            transfer_credits(transaction, 'alice', 'bob', 100)
+
+        Example (Asynchronous):
+            transaction = db.transaction()
+
+            @firestore.async_transactional
+            async def transfer_credits(transaction, from_id, to_id, amount):
+                from_user = db.doc(f'users/{from_id}')
+                to_user = db.doc(f'users/{to_id}')
+
+                await from_user.fetch(transaction=transaction)
+                await to_user.fetch(transaction=transaction)
+
+                from_user.credits -= amount
+                to_user.credits += amount
+
+                await from_user.save(transaction=transaction)
+                await to_user.save(transaction=transaction)
+
+            await transfer_credits(transaction, 'alice', 'bob', 100)
+        """
+        return self._client.transaction()
+
+    # =========================================================================
     # Utility Methods (SHARED)
     # =========================================================================
 

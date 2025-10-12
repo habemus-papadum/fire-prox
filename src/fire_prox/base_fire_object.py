@@ -139,6 +139,41 @@ class BaseFireObject:
         return self._doc_ref.path if self._doc_ref else None
 
     # =========================================================================
+    # Transaction Support (Phase 2)
+    # =========================================================================
+
+    def transaction(self) -> Any:
+        """
+        Create a transaction for atomic read-modify-write operations.
+
+        Convenience method for creating transactions directly from a document
+        reference, eliminating the need to access the root FireProx client.
+
+        Returns:
+            A native google.cloud.firestore.Transaction or
+            google.cloud.firestore.AsyncTransaction instance.
+
+        Raises:
+            ValueError: If called on a DETACHED object (no document path yet).
+
+        Example:
+            user = db.doc('users/alice')
+            transaction = user.transaction()
+
+            @firestore.transactional
+            def update_credits(transaction):
+                user.fetch(transaction=transaction)
+                user.credits += 10
+                user.save(transaction=transaction)
+
+            update_credits(transaction)
+        """
+        self._validate_not_detached("transaction()")
+
+        # Get the client from the document reference
+        return self._doc_ref._client.transaction()
+
+    # =========================================================================
     # Subcollections (Phase 2)
     # =========================================================================
 

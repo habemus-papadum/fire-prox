@@ -147,12 +147,13 @@ class AsyncFireObject(BaseFireObject):
     # Async Lifecycle Methods
     # =========================================================================
 
-    async def fetch(self, force: bool = False) -> 'AsyncFireObject':
+    async def fetch(self, force: bool = False, transaction: Optional[Any] = None) -> 'AsyncFireObject':
         """
         Fetch document data from Firestore asynchronously.
 
         Args:
             force: If True, fetch data even if already LOADED.
+            transaction: Optional transaction object for transactional reads.
 
         Returns:
             Self, to allow method chaining.
@@ -167,9 +168,17 @@ class AsyncFireObject(BaseFireObject):
             LOADED -> LOADED (if force=True)
 
         Example:
+            # Normal fetch
             user = db.doc('users/alovelace')  # ATTACHED
             await user.fetch()  # Now LOADED
-            await user.fetch(force=True)  # Refresh data
+
+            # Transactional fetch
+            transaction = db.transaction()
+            @firestore.async_transactional
+            async def read_user(transaction):
+                await user.fetch(transaction=transaction)
+                return user.credits
+            credits = await read_user(transaction)
         """
         self._validate_not_detached("fetch()")
         self._validate_not_deleted("fetch()")
@@ -179,7 +188,10 @@ class AsyncFireObject(BaseFireObject):
             return self
 
         # Async fetch from Firestore
-        snapshot = await self._doc_ref.get()
+        if transaction is not None:
+            snapshot = await self._doc_ref.get(transaction=transaction)
+        else:
+            snapshot = await self._doc_ref.get()
 
         if not snapshot.exists:
             raise NotFound(f"Document {self._doc_ref.path} does not exist")
@@ -196,33 +208,51 @@ class AsyncFireObject(BaseFireObject):
 
         return self
 
-    async def save(self, doc_id: Optional[str] = None) -> 'AsyncFireObject':
+    async def save(self, doc_id: Optional[str] = None, transaction: Optional[Any] = None) -> 'AsyncFireObject':
         """
         Save the object's data to Firestore asynchronously.
 
         Args:
             doc_id: Optional custom document ID for DETACHED objects.
+            transaction: Optional transaction object for transactional writes.
 
         Returns:
             Self, to allow method chaining.
 
         Raises:
             RuntimeError: If called on DELETED object.
-            ValueError: If DETACHED without parent_collection.
+            ValueError: If DETACHED without parent_collection, or if
+                       trying to create a new document within a transaction.
 
         State Transitions:
             DETACHED -> LOADED (creates new document)
             LOADED -> LOADED (updates if dirty)
 
         Example:
+            # Normal save
             user = collection.new()
             user.name = 'Ada'
             await user.save(doc_id='alovelace')
+
+            # Transactional save
+            transaction = db.transaction()
+            @firestore.async_transactional
+            async def update_user(transaction):
+                await user.fetch(transaction=transaction)
+                user.credits += 10
+                await user.save(transaction=transaction)
+            await update_user(transaction)
         """
         self._validate_not_deleted("save()")
 
         # DETACHED: Create new document
         if self._state == State.DETACHED:
+            if transaction is not None:
+                raise ValueError(
+                    "Cannot create new documents (DETACHED -> LOADED) within a transaction. "
+                    "Create the document first, then use transactions for updates."
+                )
+
             if not self._parent_collection:
                 raise ValueError("DETACHED object has no parent collection")
 
@@ -265,13 +295,19 @@ class AsyncFireObject(BaseFireObject):
                 for field, operation in self._atomic_ops.items():
                     update_dict[field] = operation
 
-                # Perform partial update
-                await self._doc_ref.update(update_dict)
+                # Perform partial update with or without transaction
+                if transaction is not None:
+                    transaction.update(self._doc_ref, update_dict)
+                else:
+                    await self._doc_ref.update(update_dict)
             else:
                 # ATTACHED state: use .set() for full overwrite
                 # Prepare data for storage (convert FireObjects back to DocumentReferences)
                 storage_data = self._prepare_data_for_storage()
-                await self._doc_ref.set(storage_data)
+                if transaction is not None:
+                    transaction.set(self._doc_ref, storage_data)
+                else:
+                    await self._doc_ref.set(storage_data)
 
             self._mark_clean()
 

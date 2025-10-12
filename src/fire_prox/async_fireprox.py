@@ -222,28 +222,4 @@ class AsyncFireProx(BaseFireProx):
         """
         raise NotImplementedError("Phase 2+ feature - batch operations")
 
-    def transaction(self) -> 'AsyncFireTransaction':
-        """
-        Create a transaction for atomic read-modify-write operations.
-
-        Phase 2+ feature.
-
-        Returns:
-            An AsyncFireTransaction instance.
-
-        Example:
-            @db.transactional
-            async def transfer_credits(from_user, to_user, amount):
-                from_doc = db.doc(f'users/{from_user}')
-                to_doc = db.doc(f'users/{to_user}')
-
-                await from_doc.fetch()
-                await to_doc.fetch()
-
-                from_doc.credits -= amount
-                to_doc.credits += amount
-
-                await from_doc.save()
-                await to_doc.save()
-        """
-        raise NotImplementedError("Phase 2+ feature - transactions")
+    # Note: transaction() method is inherited from BaseFireProx
