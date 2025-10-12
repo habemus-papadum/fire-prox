@@ -5,21 +5,21 @@
 | Name                                      |    Stmts |     Miss |      Cover |   Missing |
 |------------------------------------------ | -------: | -------: | ---------: | --------: |
 | src/fire\_prox/\_\_init\_\_.py            |       12 |        0 |    100.00% |           |
-| src/fire\_prox/async\_fire\_collection.py |       41 |        0 |    100.00% |           |
+| src/fire\_prox/async\_fire\_collection.py |       47 |        0 |    100.00% |           |
 | src/fire\_prox/async\_fire\_object.py     |      105 |       23 |     78.10% |89, 111, 117-121, 126-142, 188, 197, 257, 306-310, 315 |
-| src/fire\_prox/async\_fire\_query.py      |       50 |        3 |     94.00% |140, 168, 363 |
+| src/fire\_prox/async\_fire\_query.py      |       81 |        6 |     92.59% |144, 172, 350, 388, 400, 512 |
 | src/fire\_prox/async\_fireprox.py         |       25 |        2 |     92.00% |   79, 153 |
 | src/fire\_prox/base\_fire\_collection.py  |       16 |        0 |    100.00% |           |
 | src/fire\_prox/base\_fire\_object.py      |      198 |       17 |     91.41% |73, 220, 266, 312, 387-388, 392, 396, 421, 424, 447, 522, 614, 668, 685-686, 723 |
 | src/fire\_prox/base\_fireprox.py          |       28 |        1 |     96.43% |       154 |
-| src/fire\_prox/fire\_collection.py        |       38 |        0 |    100.00% |           |
+| src/fire\_prox/fire\_collection.py        |       44 |        0 |    100.00% |           |
 | src/fire\_prox/fire\_object.py            |      104 |       23 |     77.88% |83, 96-100, 104-107, 119, 134, 140, 202, 272, 300, 330-342 |
-| src/fire\_prox/fire\_query.py             |       47 |        3 |     93.62% |139, 167, 359 |
+| src/fire\_prox/fire\_query.py             |       78 |        6 |     92.31% |142, 170, 347, 384, 396, 505 |
 | src/fire\_prox/fire\_vector.py            |       39 |        0 |    100.00% |           |
 | src/fire\_prox/fireprox.py                |       21 |        2 |     90.48% |   90, 156 |
 | src/fire\_prox/state.py                   |        8 |        0 |    100.00% |           |
 | src/fire\_prox/testing/\_\_init\_\_.py    |       86 |       23 |     73.26% |39-43, 53-55, 65-67, 78-87, 90, 103-104, 107 |
-|                                 **TOTAL** |  **818** |   **97** | **88.14%** |           |
+|                                 **TOTAL** |  **892** |  **103** | **88.45%** |           |
 
 
 ## Setup coverage badge
