@@ -1,5 +1,5 @@
 - ### Implementation Log
-  - Humans:  Captain's logbook documenting the what happened(HUMANS.md)
+  - Humans:  [Captain's logbook documenting implementation process](HUMANS.md)
   - Phase 1 (Performed by Claude Code)
     - [First attempt](PHASE1_IMPLEMENTATION_SUMMARY.md): AI generated summary of what it did
     - [Revision 1.1](PHASE1_1_IMPLEMENTATION_REPORT.md): Revisions after getting some feedback clearing up some miscommunication. 

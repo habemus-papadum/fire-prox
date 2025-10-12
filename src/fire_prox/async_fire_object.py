@@ -6,6 +6,7 @@ google.cloud.firestore.AsyncClient.
 """
 
 from typing import Any, Optional
+from google.cloud import firestore
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentSnapshot
 from google.cloud.exceptions import NotFound
@@ -195,8 +196,30 @@ class AsyncFireObject(BaseFireObject):
             return self
 
         # ATTACHED/LOADED: Update if dirty
-        if self._dirty:
-            await self._doc_ref.set(self._data)
+        if self.is_dirty():
+            # Phase 2: Perform efficient partial update for LOADED state
+            if self._state == State.LOADED:
+                # Build update dict with modified and deleted fields
+                update_dict = {}
+
+                # Add modified fields
+                for field in self._dirty_fields:
+                    update_dict[field] = self._data[field]
+
+                # Add deleted fields with DELETE_FIELD sentinel
+                for field in self._deleted_fields:
+                    update_dict[field] = firestore.DELETE_FIELD
+
+                # Add atomic operations (ArrayUnion, ArrayRemove, Increment)
+                for field, operation in self._atomic_ops.items():
+                    update_dict[field] = operation
+
+                # Perform partial update
+                await self._doc_ref.update(update_dict)
+            else:
+                # ATTACHED state: use .set() for full overwrite
+                await self._doc_ref.set(self._data)
+
             self._mark_clean()
 
         if self._state == State.ATTACHED:
@@ -265,6 +288,6 @@ class AsyncFireObject(BaseFireObject):
         )
 
         object.__setattr__(obj, '_data', init_data['data'])
-        object.__setattr__(obj, '_dirty', False)
+        # Dirty tracking is already cleared by __init__ and _transition_to_loaded
 
         return obj

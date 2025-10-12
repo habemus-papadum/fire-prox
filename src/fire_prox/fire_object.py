@@ -6,6 +6,7 @@ schemaless, state-aware proxy for Firestore documents.
 """
 
 from typing import Any, Optional
+from google.cloud import firestore
 from google.cloud.firestore_v1.document import DocumentSnapshot
 from google.cloud.exceptions import NotFound
 from .base_fire_object import BaseFireObject
@@ -209,13 +210,29 @@ class FireObject(BaseFireObject):
         # Handle LOADED state - update if dirty
         if self._state == State.LOADED:
             # Skip if not dirty
-            if not self._dirty:
+            if not self.is_dirty():
                 return self
 
-            # Perform full overwrite (Phase 1)
-            self._doc_ref.set(self._data)
+            # Phase 2: Perform efficient partial update
+            # Build update dict with modified fields
+            update_dict = {}
 
-            # Clear dirty flag
+            # Add modified fields
+            for field in self._dirty_fields:
+                update_dict[field] = self._data[field]
+
+            # Add deleted fields with DELETE_FIELD sentinel
+            for field in self._deleted_fields:
+                update_dict[field] = firestore.DELETE_FIELD
+
+            # Add atomic operations (ArrayUnion, ArrayRemove, Increment)
+            for field, operation in self._atomic_ops.items():
+                update_dict[field] = operation
+
+            # Perform partial update
+            self._doc_ref.update(update_dict)
+
+            # Clear dirty tracking
             self._mark_clean()
 
             return self

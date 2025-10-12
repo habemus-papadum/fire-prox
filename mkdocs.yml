@@ -17,6 +17,7 @@ nav:
   - Architecture: Architectural_Blueprint.md
   - Implementation Log: Implementation_Log.md
   - API: reference.md
+  - Roadmap: STATUS.md
 
 
 # If you'd like to specify a separate docs directory, you can do so here
