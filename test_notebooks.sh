@@ -5,19 +5,32 @@
 # This script extracts notebook paths from mkdocs.yml and runs each one
 # through nb.sh to verify they execute without errors.
 #
-# Usage: ./test_notebooks.sh [--check-outputs]
+# Usage: ./test_notebooks.sh [--check-outputs] [--no-inplace]
 #
 # Options:
 #   --check-outputs    Verify that notebook outputs don't change during execution
+#   --no-inplace       Execute notebooks without modifying the original files
 
 set -e
 
 # Parse flags
-CHECK_OUTPUTS=""
-if [ "$1" = "--check-outputs" ]; then
-    CHECK_OUTPUTS="--check-outputs"
-    shift
-fi
+NB_FLAGS=""
+while [[ "$1" == --* ]]; do
+    case "$1" in
+        --check-outputs)
+            NB_FLAGS="$NB_FLAGS --check-outputs"
+            shift
+            ;;
+        --no-inplace)
+            NB_FLAGS="$NB_FLAGS --no-inplace"
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MKDOCS_FILE="$SCRIPT_DIR/mkdocs.yml"
@@ -37,10 +50,11 @@ fi
 
 echo "==================================================================="
 echo "Testing Demo Notebooks from mkdocs.yml"
-if [ -n "$CHECK_OUTPUTS" ]; then
-    echo "Mode: Checking for output changes"
+if [ -n "$NB_FLAGS" ]; then
+    echo "Flags:$NB_FLAGS"
 else
-    echo "Mode: Execution only (use --check-outputs to verify outputs)"
+    echo "Mode: Execute and save in-place"
+    echo "(Use --no-inplace to prevent file modification in CI)"
 fi
 echo "==================================================================="
 echo ""
@@ -77,7 +91,7 @@ while IFS= read -r notebook_path; do
     echo "-------------------------------------------------------------------"
 
     # Run the notebook through nb.sh
-    if "$SCRIPT_DIR/nb.sh" $CHECK_OUTPUTS "$FULL_PATH"; then
+    if "$SCRIPT_DIR/nb.sh" $NB_FLAGS "$FULL_PATH"; then
         echo "✓ PASSED: $notebook_path"
         PASSED=$((PASSED + 1))
     else

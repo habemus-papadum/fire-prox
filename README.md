@@ -21,7 +21,10 @@ pnpm install
 
 ## Testing
 
-The project includes a flexible test runner that makes it easy to pass additional parameters to pytest while running Firebase emulators. The test runner launches a local Firestore emulator that Python code is configured to interact with by default and then tears down the emulator once the unit tests are done. 
+The project includes a flexible test runner that makes it easy to pass additional parameters to pytest while running Firebase emulators. The test runner launches a local Firestore emulator that Python code is configured to interact with by default and then tears down the emulator once the unit tests are done.
+
+### VSCode & Demo Notebooks
+For running test in vscode or using the demo notebooks, you need to launch the developer emulator using `pnpm developer-emulator`. 
 
 ### Running Tests
 

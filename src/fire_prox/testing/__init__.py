@@ -14,6 +14,7 @@ DEFAULT_PROJECT_ID = "fire-prox-testing"
 
 def testing_client():
     """Create a synchronous Firestore client configured to connect to the emulator."""
+    check_emulator()
     return firestore.Client(
         project=DEFAULT_PROJECT_ID,
     )
@@ -21,12 +22,24 @@ def testing_client():
 
 def async_testing_client():
     """Create an asynchronous Firestore client configured to connect to the emulator."""
+    check_emulator()
     return firestore.AsyncClient(
         project=DEFAULT_PROJECT_ID,
     )
 
 DEMO_HOST = "localhost:9090"
 
+def check_emulator():
+    """Check if the Firestore emulator is running."""
+    try:
+        host = os.environ["FIRESTORE_EMULATOR_HOST"]
+        response = requests.get(host, timeout=2)
+        return response.status_code == 200
+    except Exception as e:
+        msg = (f"Firestore emulator is not running at {host}")
+        if host == DEMO_HOST:
+            msg += "\nYou can start the emulator with `pnpm developer-emulator`"
+        raise RuntimeError(msg) from e
 
 def demo_client():
     """
@@ -36,11 +49,8 @@ def demo_client():
     Otherwise, returns a client configured for the developer emulator (port 9090).
     """
     # In CI/test environment, use standard test client
-    if os.getenv('NOTEBOOK_CI'):
-        return testing_client()
-
-    # For local development, use developer emulator with UI
-    os.environ['FIRESTORE_EMULATOR_HOST'] = DEMO_HOST
+    if not os.getenv('NOTEBOOK_CI'):
+        os.environ['FIRESTORE_EMULATOR_HOST'] = DEMO_HOST
     return testing_client()
 
 def async_demo_client():
@@ -51,11 +61,8 @@ def async_demo_client():
     Otherwise, returns a client configured for the developer emulator (port 9090).
     """
     # In CI/test environment, use standard async test client
-    if os.getenv('NOTEBOOK_CI'):
-        return async_testing_client()
-
-    # For local development, use developer emulator with UI
-    os.environ["FIRESTORE_EMULATOR_HOST"] = DEMO_HOST
+    if not os.getenv("NOTEBOOK_CI"):
+        os.environ["FIRESTORE_EMULATOR_HOST"] = DEMO_HOST
     return async_testing_client()
 
 class FirestoreProjectCleanupError(RuntimeError):
