@@ -14,13 +14,13 @@ from src.fire_prox import FireProx
 def db():
     """Create a FireProx instance connected to the emulator."""
     client = testing_client()
-    return FireProx(client)
+    yield FireProx(client)
 
 
 @pytest.fixture
 def test_collection(db):
     """Return a test collection name."""
-    return db.collection('phase2_test_collection')
+    yield db.collection('phase2_test_collection')
 
 
 class TestAtomicOperations:

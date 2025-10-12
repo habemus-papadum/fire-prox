@@ -6,10 +6,12 @@ google.cloud.firestore.AsyncClient.
 """
 
 from typing import Any, Optional
+
 from google.cloud import firestore
+from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentSnapshot
-from google.cloud.exceptions import NotFound
+
 from .base_fire_object import BaseFireObject
 from .state import State
 

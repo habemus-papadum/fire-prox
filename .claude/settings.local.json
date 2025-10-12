@@ -9,7 +9,10 @@
       "Bash(./nb.sh)",
       "Bash(./nb.sh:*)",
       "Bash(./test_notebooks.sh:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(ruff check:*)"
     ],
     "deny": [],
     "ask": []
