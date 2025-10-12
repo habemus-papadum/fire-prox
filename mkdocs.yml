@@ -23,6 +23,7 @@ nav:
       - Document References: demos/topics/document_references.ipynb
       - Vector Embeddings: demos/topics/vector_embeddings.ipynb
       - Transactions: demos/topics/transactions.ipynb
+      - Projections: demos/topics/projections.ipynb
   - Architecture: Architectural_Blueprint.md
   - Implementation Log: Implementation_Log.md
   - API: reference.md

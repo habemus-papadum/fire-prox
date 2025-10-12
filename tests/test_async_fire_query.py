@@ -510,3 +510,234 @@ class TestQueryPaginationAsync:
         assert len(page2_results) == 2
         assert page2_results[0].birth_year == 1903  # John
         assert page2_results[1].birth_year == 1815  # Ada
+
+
+@pytest.mark.asyncio
+class TestProjectionsAsync:
+    """Test async query projections with .select() method."""
+
+    async def test_select_single_field(self, async_test_collection):
+        """Test selecting a single field returns dictionaries."""
+        # Select only the name field
+        query = async_test_collection.select('name')
+        results = await query.get()
+
+        assert len(results) == 5
+        # Results should be dictionaries, not AsyncFireObjects
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'name' in result
+            # Only the selected field should be present
+            assert set(result.keys()) == {'name'}
+
+    async def test_select_multiple_fields(self, async_test_collection):
+        """Test selecting multiple fields."""
+        # Select name and birth_year
+        query = async_test_collection.select('name', 'birth_year')
+        results = await query.get()
+
+        assert len(results) == 5
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'name' in result
+            assert 'birth_year' in result
+            # Only selected fields should be present
+            assert set(result.keys()) == {'name', 'birth_year'}
+            # Values should be correct
+            assert isinstance(result['name'], str)
+            assert isinstance(result['birth_year'], int)
+
+    async def test_select_with_where_filter(self, async_test_collection):
+        """Test combining select with where clause."""
+        # Select name and score for English users
+        query = (async_test_collection
+                 .where('country', '==', 'England')
+                 .select('name', 'score'))
+        results = await query.get()
+
+        assert len(results) == 3  # Ada, Charles, Alan
+        for result in results:
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'name', 'score'}
+            assert result['score'] >= 90
+
+    async def test_select_with_order_by(self, async_test_collection):
+        """Test combining select with order_by."""
+        # Select name and birth_year, ordered by birth_year
+        query = (async_test_collection
+                 .select('name', 'birth_year')
+                 .order_by('birth_year'))
+        results = await query.get()
+
+        assert len(results) == 5
+        # Verify ordering
+        years = [r['birth_year'] for r in results]
+        assert years == sorted(years)
+        # Verify only selected fields present
+        for result in results:
+            assert set(result.keys()) == {'name', 'birth_year'}
+
+    async def test_select_with_limit(self, async_test_collection):
+        """Test combining select with limit."""
+        # Select name for first 3 users
+        query = (async_test_collection
+                 .select('name')
+                 .order_by('birth_year')
+                 .limit(3))
+        results = await query.get()
+
+        assert len(results) == 3
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'name' in result
+            assert set(result.keys()) == {'name'}
+
+    async def test_select_stream_returns_dicts(self, async_test_collection):
+        """Test that select with stream() yields dictionaries."""
+        query = async_test_collection.select('name', 'country')
+        results = []
+
+        async for result in query.stream():
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'name', 'country'}
+            results.append(result)
+
+        assert len(results) == 5
+
+    async def test_select_no_fields_raises_error(self, async_test_collection):
+        """Test that select() with no fields raises ValueError."""
+        with pytest.raises(ValueError, match="select\\(\\) requires at least one field"):
+            async_test_collection.select()
+
+    async def test_select_returns_new_query_instance(self, async_test_collection):
+        """Test that select() follows immutable pattern."""
+        query1 = async_test_collection.where('country', '==', 'England')
+        query2 = query1.select('name')
+
+        # query1 should still return AsyncFireObjects
+        results1 = await query1.get()
+        assert len(results1) == 3
+        for result in results1:
+            assert hasattr(result, 'name')  # AsyncFireObject
+            assert hasattr(result, 'is_loaded')
+
+        # query2 should return dictionaries
+        results2 = await query2.get()
+        assert len(results2) == 3
+        for result in results2:
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'name'}
+
+    async def test_select_with_chaining(self, async_test_collection):
+        """Test complex query chain with select."""
+        # Complex chain: where + select + order_by + limit
+        query = (async_test_collection
+                 .where('birth_year', '>', 1850)
+                 .select('name', 'birth_year', 'score')
+                 .order_by('score', direction='DESCENDING')
+                 .limit(2))
+        results = await query.get()
+
+        assert len(results) == 2
+        # Should be Alan (98) and John (97)
+        assert results[0]['score'] == 98
+        assert results[1]['score'] == 97
+        # Verify only selected fields
+        for result in results:
+            assert set(result.keys()) == {'name', 'birth_year', 'score'}
+
+    async def test_select_empty_results(self, async_test_collection):
+        """Test select with query that returns no results."""
+        query = (async_test_collection
+                 .where('birth_year', '>', 2000)
+                 .select('name'))
+        results = await query.get()
+
+        assert results == []
+
+
+@pytest.fixture
+async def async_test_collection_with_refs(async_db):
+    """Create test collection with DocumentReference fields."""
+    # Create users collection
+    users = async_db.collection('async_projection_users')
+    user1 = users.new()
+    user1.name = 'Alice'
+    user1.email = 'alice@example.com'
+    await user1.save(doc_id='alice')
+
+    user2 = users.new()
+    user2.name = 'Bob'
+    user2.email = 'bob@example.com'
+    await user2.save(doc_id='bob')
+
+    # Create posts collection with author references
+    posts = async_db.collection('async_projection_posts')
+
+    post1 = posts.new()
+    post1.title = 'First Post'
+    post1.content = 'Hello World'
+    post1.author = users.doc('alice')  # DocumentReference
+    await post1.save(doc_id='post1')
+
+    post2 = posts.new()
+    post2.title = 'Second Post'
+    post2.content = 'More content'
+    post2.author = users.doc('bob')  # DocumentReference
+    await post2.save(doc_id='post2')
+
+    yield posts
+
+
+@pytest.mark.asyncio
+class TestProjectionsWithReferencesAsync:
+    """Test async projections with DocumentReference fields."""
+
+    async def test_select_converts_reference_to_asyncfireobject(self, async_test_collection_with_refs):
+        """Test that DocumentReferences in projections are converted to AsyncFireObjects."""
+        query = async_test_collection_with_refs.select('title', 'author')
+        results = await query.get()
+
+        assert len(results) == 2
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'title' in result
+            assert 'author' in result
+
+            # Author should be an AsyncFireObject, not a DocumentReference
+            from src.fire_prox.async_fire_object import AsyncFireObject
+            assert isinstance(result['author'], AsyncFireObject)
+            # Should be in ATTACHED state
+            assert result['author'].is_attached()
+            # Can be fetched
+            await result['author'].fetch()
+            assert result['author'].is_loaded()
+            assert hasattr(result['author'], 'name')
+
+    async def test_select_reference_field_only(self, async_test_collection_with_refs):
+        """Test selecting only a reference field."""
+        query = async_test_collection_with_refs.select('author')
+        results = await query.get()
+
+        assert len(results) == 2
+        for result in results:
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'author'}
+
+            from src.fire_prox.async_fire_object import AsyncFireObject
+            assert isinstance(result['author'], AsyncFireObject)
+
+    async def test_select_with_stream_converts_references(self, async_test_collection_with_refs):
+        """Test that stream() also converts DocumentReferences."""
+        query = async_test_collection_with_refs.select('title', 'author')
+
+        count = 0
+        async for result in query.stream():
+            assert isinstance(result, dict)
+            assert 'author' in result
+
+            from src.fire_prox.async_fire_object import AsyncFireObject
+            assert isinstance(result['author'], AsyncFireObject)
+            count += 1
+
+        assert count == 2

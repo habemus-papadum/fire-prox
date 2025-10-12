@@ -501,3 +501,232 @@ class TestQueryPagination:
         assert len(page2_results) == 2
         assert page2_results[0].birth_year == 1903  # John
         assert page2_results[1].birth_year == 1815  # Ada
+
+
+class TestProjections:
+    """Test query projections with .select() method."""
+
+    def test_select_single_field(self, test_collection):
+        """Test selecting a single field returns dictionaries."""
+        # Select only the name field
+        query = test_collection.select('name')
+        results = query.get()
+
+        assert len(results) == 5
+        # Results should be dictionaries, not FireObjects
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'name' in result
+            # Only the selected field should be present
+            assert set(result.keys()) == {'name'}
+
+    def test_select_multiple_fields(self, test_collection):
+        """Test selecting multiple fields."""
+        # Select name and birth_year
+        query = test_collection.select('name', 'birth_year')
+        results = query.get()
+
+        assert len(results) == 5
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'name' in result
+            assert 'birth_year' in result
+            # Only selected fields should be present
+            assert set(result.keys()) == {'name', 'birth_year'}
+            # Values should be correct
+            assert isinstance(result['name'], str)
+            assert isinstance(result['birth_year'], int)
+
+    def test_select_with_where_filter(self, test_collection):
+        """Test combining select with where clause."""
+        # Select name and score for English users
+        query = (test_collection
+                 .where('country', '==', 'England')
+                 .select('name', 'score'))
+        results = query.get()
+
+        assert len(results) == 3  # Ada, Charles, Alan
+        for result in results:
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'name', 'score'}
+            assert result['score'] >= 90
+
+    def test_select_with_order_by(self, test_collection):
+        """Test combining select with order_by."""
+        # Select name and birth_year, ordered by birth_year
+        query = (test_collection
+                 .select('name', 'birth_year')
+                 .order_by('birth_year'))
+        results = query.get()
+
+        assert len(results) == 5
+        # Verify ordering
+        years = [r['birth_year'] for r in results]
+        assert years == sorted(years)
+        # Verify only selected fields present
+        for result in results:
+            assert set(result.keys()) == {'name', 'birth_year'}
+
+    def test_select_with_limit(self, test_collection):
+        """Test combining select with limit."""
+        # Select name for first 3 users
+        query = (test_collection
+                 .select('name')
+                 .order_by('birth_year')
+                 .limit(3))
+        results = query.get()
+
+        assert len(results) == 3
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'name' in result
+            assert set(result.keys()) == {'name'}
+
+    def test_select_stream_returns_dicts(self, test_collection):
+        """Test that select with stream() yields dictionaries."""
+        query = test_collection.select('name', 'country')
+        results = []
+
+        for result in query.stream():
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'name', 'country'}
+            results.append(result)
+
+        assert len(results) == 5
+
+    def test_select_no_fields_raises_error(self, test_collection):
+        """Test that select() with no fields raises ValueError."""
+        with pytest.raises(ValueError, match="select\\(\\) requires at least one field"):
+            test_collection.select()
+
+    def test_select_returns_new_query_instance(self, test_collection):
+        """Test that select() follows immutable pattern."""
+        query1 = test_collection.where('country', '==', 'England')
+        query2 = query1.select('name')
+
+        # query1 should still return FireObjects
+        results1 = query1.get()
+        assert len(results1) == 3
+        for result in results1:
+            assert hasattr(result, 'name')  # FireObject
+            assert hasattr(result, 'is_loaded')
+
+        # query2 should return dictionaries
+        results2 = query2.get()
+        assert len(results2) == 3
+        for result in results2:
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'name'}
+
+    def test_select_with_chaining(self, test_collection):
+        """Test complex query chain with select."""
+        # Complex chain: where + select + order_by + limit
+        query = (test_collection
+                 .where('birth_year', '>', 1850)
+                 .select('name', 'birth_year', 'score')
+                 .order_by('score', direction='DESCENDING')
+                 .limit(2))
+        results = query.get()
+
+        assert len(results) == 2
+        # Should be Alan (98) and John (97)
+        assert results[0]['score'] == 98
+        assert results[1]['score'] == 97
+        # Verify only selected fields
+        for result in results:
+            assert set(result.keys()) == {'name', 'birth_year', 'score'}
+
+    def test_select_empty_results(self, test_collection):
+        """Test select with query that returns no results."""
+        query = (test_collection
+                 .where('birth_year', '>', 2000)
+                 .select('name'))
+        results = query.get()
+
+        assert results == []
+
+
+@pytest.fixture
+def test_collection_with_refs(db):
+    """Create test collection with DocumentReference fields."""
+    # Create users collection
+    users = db.collection('projection_users')
+    user1 = users.new()
+    user1.name = 'Alice'
+    user1.email = 'alice@example.com'
+    user1.save(doc_id='alice')
+
+    user2 = users.new()
+    user2.name = 'Bob'
+    user2.email = 'bob@example.com'
+    user2.save(doc_id='bob')
+
+    # Create posts collection with author references
+    posts = db.collection('projection_posts')
+
+    post1 = posts.new()
+    post1.title = 'First Post'
+    post1.content = 'Hello World'
+    post1.author = users.doc('alice')  # DocumentReference
+    post1.save(doc_id='post1')
+
+    post2 = posts.new()
+    post2.title = 'Second Post'
+    post2.content = 'More content'
+    post2.author = users.doc('bob')  # DocumentReference
+    post2.save(doc_id='post2')
+
+    yield posts
+
+
+class TestProjectionsWithReferences:
+    """Test projections with DocumentReference fields."""
+
+    def test_select_converts_reference_to_fireobject(self, test_collection_with_refs):
+        """Test that DocumentReferences in projections are converted to FireObjects."""
+        query = test_collection_with_refs.select('title', 'author')
+        results = query.get()
+
+        assert len(results) == 2
+        for result in results:
+            assert isinstance(result, dict)
+            assert 'title' in result
+            assert 'author' in result
+
+            # Author should be a FireObject, not a DocumentReference
+            from src.fire_prox.fire_object import FireObject
+            assert isinstance(result['author'], FireObject)
+            # Should be in ATTACHED state
+            assert result['author'].is_attached()
+            # Can be fetched
+            result['author'].fetch()
+            assert result['author'].is_loaded()
+            assert hasattr(result['author'], 'name')
+
+    def test_select_reference_field_only(self, test_collection_with_refs):
+        """Test selecting only a reference field."""
+        query = test_collection_with_refs.select('author')
+        results = query.get()
+
+        assert len(results) == 2
+        for result in results:
+            assert isinstance(result, dict)
+            assert set(result.keys()) == {'author'}
+
+            from src.fire_prox.fire_object import FireObject
+            assert isinstance(result['author'], FireObject)
+
+    def test_select_with_stream_converts_references(self, test_collection_with_refs):
+        """Test that stream() also converts DocumentReferences."""
+        query = test_collection_with_refs.select('title', 'author')
+
+        count = 0
+        for result in query.stream():
+            assert isinstance(result, dict)
+            assert 'author' in result
+
+            from src.fire_prox.fire_object import FireObject
+            assert isinstance(result['author'], FireObject)
+            count += 1
+
+        assert count == 2

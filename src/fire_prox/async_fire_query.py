@@ -6,9 +6,11 @@ Firestore AsyncQuery objects and provides a chainable interface for building and
 executing async queries.
 """
 
-from typing import List, AsyncIterator, Any, Optional
+from typing import List, AsyncIterator, Any, Optional, Dict, Union
 from google.cloud.firestore_v1.async_query import AsyncQuery
 from google.cloud.firestore_v1.base_query import FieldFilter
+from google.cloud.firestore_v1.document import DocumentReference
+from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from .async_fire_object import AsyncFireObject
 
 
@@ -52,16 +54,18 @@ class AsyncFireQuery:
             results = [AsyncFireObject.from_snapshot(snap) async for snap in native_query.stream()]
     """
 
-    def __init__(self, native_query: AsyncQuery, parent_collection: Optional[Any] = None):
+    def __init__(self, native_query: AsyncQuery, parent_collection: Optional[Any] = None, projection: Optional[tuple] = None):
         """
         Initialize an AsyncFireQuery.
 
         Args:
             native_query: The underlying native AsyncQuery object from google-cloud-firestore.
             parent_collection: Optional reference to parent AsyncFireCollection.
+            projection: Optional tuple of field paths to project (select specific fields).
         """
         self._query = native_query
         self._parent_collection = parent_collection
+        self._projection = projection
 
     # =========================================================================
     # Query Building Methods (Immutable Pattern)
@@ -101,7 +105,7 @@ class AsyncFireQuery:
         # Create FieldFilter and add to query
         filter_obj = FieldFilter(field, op, value)
         new_query = self._query.where(filter=filter_obj)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
     def order_by(self, field: str, direction: str = 'ASCENDING') -> 'AsyncFireQuery':
         """
@@ -140,7 +144,7 @@ class AsyncFireQuery:
             raise ValueError(f"Invalid direction: {direction}. Must be 'ASCENDING' or 'DESCENDING'")
 
         new_query = self._query.order_by(field, direction=direction_const)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
     def limit(self, count: int) -> 'AsyncFireQuery':
         """
@@ -168,7 +172,7 @@ class AsyncFireQuery:
             raise ValueError(f"Limit count must be positive, got {count}")
 
         new_query = self._query.limit(count)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
     def start_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -202,7 +206,7 @@ class AsyncFireQuery:
             page2 = await users.order_by('age').start_at(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_at(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
     def start_after(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -233,7 +237,7 @@ class AsyncFireQuery:
             page2 = await users.order_by('age').start_after(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_after(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
     def end_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -261,7 +265,7 @@ class AsyncFireQuery:
             query = users.order_by('age').end_at(target_snapshot)
         """
         new_query = self._query.end_at(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
     def end_before(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
         """
@@ -289,28 +293,146 @@ class AsyncFireQuery:
             query = users.order_by('age').end_before(target_snapshot)
         """
         new_query = self._query.end_before(*document_fields_or_snapshot)
-        return AsyncFireQuery(new_query, self._parent_collection)
+        return AsyncFireQuery(new_query, self._parent_collection, self._projection)
+
+    def select(self, *field_paths: str) -> 'AsyncFireQuery':
+        """
+        Select specific fields to return (projection).
+
+        Creates a new AsyncFireQuery that only returns the specified fields in the
+        query results. When using projections, query results will be returned
+        as vanilla dictionaries instead of AsyncFireObject instances. Any
+        DocumentReferences in the returned dictionaries will be automatically
+        converted to AsyncFireObject instances in ATTACHED state.
+
+        Args:
+            *field_paths: One or more field paths to select. Field paths can
+                         include nested fields using dot notation (e.g., 'address.city').
+
+        Returns:
+            A new AsyncFireQuery instance with the projection applied.
+
+        Raises:
+            ValueError: If no field paths are provided.
+
+        Example:
+            # Select a single field
+            query = users.select('name')
+            results = await query.get()
+            # Returns: [{'name': 'Alice'}, {'name': 'Bob'}, ...]
+
+            # Select multiple fields
+            query = users.select('name', 'email', 'birth_year')
+            results = await query.get()
+            # Returns: [{'name': 'Alice', 'email': 'alice@example.com', 'birth_year': 1990}, ...]
+
+            # Select with filtering and ordering
+            query = (users
+                     .where('birth_year', '>', 1990)
+                     .select('name', 'birth_year')
+                     .order_by('birth_year')
+                     .limit(10))
+
+            # DocumentReferences are auto-converted to AsyncFireObjects
+            query = posts.select('title', 'author')  # author is a DocumentReference
+            results = await query.get()
+            # results[0]['author'] is an AsyncFireObject, not a DocumentReference
+            await results[0]['author'].fetch()
+            print(results[0]['author'].name)
+
+        Note:
+            - Projection queries return dictionaries, not AsyncFireObject instances
+            - Only the selected fields will be present in the returned dictionaries
+            - DocumentReferences are automatically hydrated to AsyncFireObject instances
+            - Projected results are more bandwidth-efficient for large documents
+        """
+        if not field_paths:
+            raise ValueError("select() requires at least one field path")
+
+        # Create new query with projection
+        new_query = self._query.select(list(field_paths))
+        return AsyncFireQuery(new_query, self._parent_collection, projection=field_paths)
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    def _convert_projection_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Convert DocumentReferences in projection data to AsyncFireObjects.
+
+        Recursively processes a dictionary to convert any DocumentReference
+        or AsyncDocumentReference instances to AsyncFireObject instances in
+        ATTACHED state. This allows users to work with references naturally
+        using the FireProx API.
+
+        Args:
+            data: Dictionary containing projection data from Firestore.
+
+        Returns:
+            Dictionary with DocumentReferences converted to AsyncFireObjects.
+        """
+        from .state import State
+
+        result = {}
+        for key, value in data.items():
+            if isinstance(value, (DocumentReference, AsyncDocumentReference)):
+                # Convert DocumentReference/AsyncDocumentReference to AsyncFireObject in ATTACHED state
+                result[key] = AsyncFireObject(
+                    doc_ref=value,
+                    initial_state=State.ATTACHED,
+                    parent_collection=self._parent_collection
+                )
+            elif isinstance(value, list):
+                # Recursively process lists
+                result[key] = [
+                    AsyncFireObject(
+                        doc_ref=item,
+                        initial_state=State.ATTACHED,
+                        parent_collection=self._parent_collection
+                    ) if isinstance(item, (DocumentReference, AsyncDocumentReference))
+                    else self._convert_projection_data(item) if isinstance(item, dict)
+                    else item
+                    for item in value
+                ]
+            elif isinstance(value, dict):
+                # Recursively process nested dictionaries
+                result[key] = self._convert_projection_data(value)
+            else:
+                # Keep primitive values as-is
+                result[key] = value
+        return result
 
     # =========================================================================
     # Query Execution Methods
     # =========================================================================
 
-    async def get(self) -> List[AsyncFireObject]:
+    async def get(self) -> Union[List[AsyncFireObject], List[Dict[str, Any]]]:
         """
         Execute the query and return results as a list.
 
         Fetches all matching documents asynchronously and hydrates them into
-        AsyncFireObject instances in LOADED state.
+        AsyncFireObject instances in LOADED state. If a projection is active
+        (via .select()), returns vanilla dictionaries instead of AsyncFireObject
+        instances.
 
         Returns:
-            List of AsyncFireObject instances for all documents matching the query.
-            Empty list if no documents match.
+            - If no projection: List of AsyncFireObject instances for all documents
+              matching the query.
+            - If projection active: List of dictionaries containing only the
+              selected fields. DocumentReferences are converted to AsyncFireObjects.
+            - Empty list if no documents match.
 
         Example:
-            # Get all results as a list
+            # Get all results as AsyncFireObjects
             users = await query.get()
             for user in users:
                 print(f"{user.name}: {user.birth_year}")
+
+            # Get projected results as dictionaries
+            users = await query.select('name', 'email').get()
+            for user_dict in users:
+                print(f"{user_dict['name']}: {user_dict['email']}")
 
             # Check if results exist
             results = await query.get()
@@ -319,29 +441,48 @@ class AsyncFireQuery:
             else:
                 print("No users found")
         """
-        # Execute query and hydrate results
+        # Execute query
         results = []
+
+        # If projection is active, return vanilla dictionaries
+        if self._projection:
+            async for snap in self._query.stream():
+                data = snap.to_dict()
+                # Convert DocumentReferences to AsyncFireObjects
+                converted_data = self._convert_projection_data(data)
+                results.append(converted_data)
+            return results
+
+        # Otherwise, return AsyncFireObjects as usual
         async for snapshot in self._query.stream():
             obj = AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
             results.append(obj)
         return results
 
-    async def stream(self) -> AsyncIterator[AsyncFireObject]:
+    async def stream(self) -> Union[AsyncIterator[AsyncFireObject], AsyncIterator[Dict[str, Any]]]:
         """
         Execute the query and stream results as an async iterator.
 
         Returns an async generator that yields AsyncFireObject instances one at
         a time. This is more memory-efficient than .get() for large result sets
-        as it doesn't load all results into memory at once.
+        as it doesn't load all results into memory at once. If a projection
+        is active (via .select()), yields vanilla dictionaries instead.
 
         Yields:
-            AsyncFireObject instances in LOADED state for each matching document.
+            - If no projection: AsyncFireObject instances in LOADED state for each
+              matching document.
+            - If projection active: Dictionaries containing only the selected
+              fields. DocumentReferences are converted to AsyncFireObjects.
 
         Example:
-            # Stream results one at a time
+            # Stream results one at a time as AsyncFireObjects
             async for user in query.stream():
                 print(f"{user.name}: {user.birth_year}")
                 # Process each user without loading all users into memory
+
+            # Stream projected results as dictionaries
+            async for user_dict in query.select('name', 'email').stream():
+                print(f"{user_dict['name']}: {user_dict['email']}")
 
             # Works with any query
             async for post in (posts
@@ -350,9 +491,17 @@ class AsyncFireQuery:
                               .stream()):
                 print(post.title)
         """
-        # Stream results and hydrate on-the-fly
-        async for snapshot in self._query.stream():
-            yield AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
+        # If projection is active, stream vanilla dictionaries
+        if self._projection:
+            async for snapshot in self._query.stream():
+                data = snapshot.to_dict()
+                # Convert DocumentReferences to AsyncFireObjects
+                converted_data = self._convert_projection_data(data)
+                yield converted_data
+        else:
+            # Otherwise, stream AsyncFireObjects as usual
+            async for snapshot in self._query.stream():
+                yield AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
 
     def __repr__(self) -> str:
         """Return string representation of the query."""

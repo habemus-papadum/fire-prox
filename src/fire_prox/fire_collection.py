@@ -211,6 +211,33 @@ class FireCollection(BaseFireCollection):
         native_query = self._collection_ref.limit(count)
         return FireQuery(native_query, parent_collection=self)
 
+    def select(self, *field_paths: str) -> 'FireQuery':
+        """
+        Create a query with field projection.
+
+        Phase 4 Part 3 feature. Selects specific fields to return in query results.
+        Returns vanilla dictionaries instead of FireObject instances.
+
+        Args:
+            *field_paths: One or more field paths to select.
+
+        Returns:
+            A FireQuery instance with projection applied.
+
+        Example:
+            # Select specific fields
+            results = users.select('name', 'email').get()
+            # Returns: [{'name': 'Alice', 'email': 'alice@example.com'}, ...]
+        """
+        from .fire_query import FireQuery
+
+        if not field_paths:
+            raise ValueError("select() requires at least one field path")
+
+        # Create query with projection
+        native_query = self._collection_ref.select(list(field_paths))
+        return FireQuery(native_query, parent_collection=self, projection=field_paths)
+
     def get_all(self) -> Iterator[FireObject]:
         """
         Retrieve all documents in the collection.
