@@ -28,7 +28,8 @@
 - ✅ **Field-Level Dirty Tracking** - Replace boolean flag with granular field tracking
 - ✅ **Partial Updates** - Send only modified fields with `.update()`
 - ✅ **Subcollection Support** - Hierarchical data with `.collection()` method
-- ✅ **Atomic Operations** - ArrayUnion, ArrayRemove, Increment
+- ✅ **Atomic Operations** - ArrayUnion, ArrayRemove, Increment with local simulation
+- ✅ **Mutual Exclusivity** - Clean separation between vanilla and atomic operations per field
 - ✅ **Query Builder** - Chainable `.where().order_by().limit()` interface (Phase 2.5)
 - ✅ **Pagination Cursors** - `.start_at()`, `.start_after()`, `.end_at()`, `.end_before()` (Phase 2.5)
 
@@ -182,11 +183,7 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
 
 ### Minor Issues
 
-1. **Atomic Operations Local State** (By Design)
-   - Atomic operations don't update local object state automatically
-   - Workaround: Call `fetch(force=True)` after save to sync
-   - Rationale: Automatic fetch would negate performance benefits of atomic ops
-   - Status: Documented in method docstrings
+None currently identified.
 
 ### Design Limitations (Intentional)
 
@@ -311,10 +308,13 @@ if user.is_dirty():
     print(f"Changed: {user.dirty_fields}")
     print(f"Deleted: {user.deleted_fields}")
 
-# Atomic operations
+# Atomic operations (with local simulation - no fetch needed!)
 user.array_union('tags', ['firestore'])
 user.array_remove('tags', ['deprecated'])
 user.increment('score', 10)
+user.save()
+print(user.tags)  # Immediately reflects changes!
+print(user.score)  # Local state updated!
 
 # Subcollections
 posts = user.collection('posts')

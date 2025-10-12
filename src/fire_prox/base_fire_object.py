@@ -198,11 +198,18 @@ class BaseFireObject:
 
     def array_union(self, field: str, values: list) -> None:
         """
-        Mark field for ArrayUnion operation.
+        Mark field for ArrayUnion operation and simulate locally.
 
         Phase 2 feature. ArrayUnion adds elements to an array field without
         reading the document first. If the array doesn't exist, it creates it.
         Duplicate values are automatically deduplicated.
+
+        The operation is simulated locally, so the array is immediately
+        updated in memory. This eliminates the need to call fetch() after save().
+
+        Mutual Exclusivity: A field can be either modified directly (vanilla) OR
+        via atomic operations, but not both. Once array_union() is called on a field,
+        you cannot modify that field directly until after save().
 
         Args:
             field: The field name to apply ArrayUnion to.
@@ -210,24 +217,45 @@ class BaseFireObject:
 
         Raises:
             RuntimeError: If called on a DELETED object.
+            ValueError: If the field has been modified directly (is dirty).
 
         Example:
             user = db.doc('users/ada')
             user.array_union('tags', ['python', 'firestore'])
-            user.save()
+            user.save()  # No fetch() needed - local state is already updated!
         """
         self._validate_not_deleted("array_union()")
 
-        # Store the operation
+        # Validate field is not dirty (mutual exclusivity)
+        if field in self._dirty_fields:
+            raise ValueError(
+                f"Cannot perform atomic array_union on field '{field}' - "
+                f"field has been modified directly. Save changes first or use atomic operations exclusively."
+            )
+
+        # Simulate locally: get current array (default to []) and add unique values
+        current_array = self._data.get(field, [])
+        # Add only values that aren't already in the array (deduplication)
+        updated_array = current_array + [v for v in values if v not in current_array]
+        self._data[field] = updated_array
+
+        # Store the operation for server-side execution
         from google.cloud import firestore
         self._atomic_ops[field] = firestore.ArrayUnion(values)
 
     def array_remove(self, field: str, values: list) -> None:
         """
-        Mark field for ArrayRemove operation.
+        Mark field for ArrayRemove operation and simulate locally.
 
         Phase 2 feature. ArrayRemove removes specified elements from an array
         field without reading the document first.
+
+        The operation is simulated locally, so the array is immediately
+        updated in memory. This eliminates the need to call fetch() after save().
+
+        Mutual Exclusivity: A field can be either modified directly (vanilla) OR
+        via atomic operations, but not both. Once array_remove() is called on a field,
+        you cannot modify that field directly until after save().
 
         Args:
             field: The field name to apply ArrayRemove to.
@@ -235,25 +263,45 @@ class BaseFireObject:
 
         Raises:
             RuntimeError: If called on a DELETED object.
+            ValueError: If the field has been modified directly (is dirty).
 
         Example:
             user = db.doc('users/ada')
             user.array_remove('tags', ['deprecated'])
-            user.save()
+            user.save()  # No fetch() needed - local state is already updated!
         """
         self._validate_not_deleted("array_remove()")
 
-        # Store the operation
+        # Validate field is not dirty (mutual exclusivity)
+        if field in self._dirty_fields:
+            raise ValueError(
+                f"Cannot perform atomic array_remove on field '{field}' - "
+                f"field has been modified directly. Save changes first or use atomic operations exclusively."
+            )
+
+        # Simulate locally: filter out values to remove
+        current_array = self._data.get(field, [])
+        updated_array = [item for item in current_array if item not in values]
+        self._data[field] = updated_array
+
+        # Store the operation for server-side execution
         from google.cloud import firestore
         self._atomic_ops[field] = firestore.ArrayRemove(values)
 
     def increment(self, field: str, value: float) -> None:
         """
-        Mark field for Increment operation.
+        Mark field for Increment operation and simulate locally.
 
         Phase 2 feature. Increment atomically increments a numeric field by the
         given value without reading the document first. If the field doesn't
         exist, it treats it as 0.
+
+        The operation is simulated locally, so the field value is immediately
+        updated in memory. This eliminates the need to call fetch() after save().
+
+        Mutual Exclusivity: A field can be either modified directly (vanilla) OR
+        via atomic operations, but not both. Once increment() is called on a field,
+        you cannot modify that field directly until after save().
 
         Args:
             field: The field name to increment.
@@ -261,16 +309,28 @@ class BaseFireObject:
 
         Raises:
             RuntimeError: If called on a DELETED object.
+            ValueError: If the field has been modified directly (is dirty).
 
         Example:
             user = db.doc('users/ada')
             user.increment('view_count', 1)
             user.increment('score', -5)  # Decrement by 5
-            user.save()
+            user.save()  # No fetch() needed - local state is already updated!
         """
         self._validate_not_deleted("increment()")
 
-        # Store the operation
+        # Validate field is not dirty (mutual exclusivity)
+        if field in self._dirty_fields:
+            raise ValueError(
+                f"Cannot perform atomic increment on field '{field}' - "
+                f"field has been modified directly. Save changes first or use atomic operations exclusively."
+            )
+
+        # Simulate locally: get current value (default to 0) and add increment
+        current_value = self._data.get(field, 0)
+        self._data[field] = current_value + value
+
+        # Store the operation for server-side execution
         from google.cloud import firestore
         self._atomic_ops[field] = firestore.Increment(value)
 
@@ -285,6 +345,7 @@ class BaseFireObject:
         Internal attributes (starting with _) are stored directly on object.
 
         Phase 2: Track field-level changes for efficient partial updates.
+        Enforces mutual exclusivity between vanilla and atomic operations.
         """
         # Internal attributes bypass _data storage
         if name in self._INTERNAL_ATTRS:
@@ -299,6 +360,13 @@ class BaseFireObject:
         if not hasattr(self, '_data'):
             object.__setattr__(self, name, value)
         else:
+            # Enforce mutual exclusivity: cannot modify field with pending atomic operation
+            if hasattr(self, '_atomic_ops') and name in self._atomic_ops:
+                raise ValueError(
+                    f"Cannot modify field '{name}' directly - "
+                    f"field has a pending atomic operation. Save changes first or use vanilla modifications exclusively."
+                )
+
             # Convert special types for storage (FireObject → DocumentReference, FireVector → Vector, etc.)
             value = self._convert_value_for_storage(value)
 

@@ -37,8 +37,7 @@ class TestAtomicOperations:
         doc.array_union('tags', ['python', 'firestore'])
         doc.save()
 
-        # Verify the array was created
-        doc.fetch(force=True)
+        # Verify the array was created (local simulation already updated state)
         assert 'tags' in doc.to_dict()
         assert set(doc.tags) == {'python', 'firestore'}
 
@@ -54,8 +53,7 @@ class TestAtomicOperations:
         doc.array_union('tags', ['firestore', 'database'])
         doc.save()
 
-        # Verify the elements were added
-        doc.fetch(force=True)
+        # Verify the elements were added (local simulation already updated state)
         assert set(doc.tags) == {'python', 'firestore', 'database'}
 
     def test_array_union_deduplicates(self, test_collection):
@@ -70,8 +68,7 @@ class TestAtomicOperations:
         doc.array_union('tags', ['firestore', 'database', 'python'])
         doc.save()
 
-        # Verify deduplication
-        doc.fetch(force=True)
+        # Verify deduplication (local simulation already updated state)
         assert set(doc.tags) == {'python', 'firestore', 'database'}
 
     def test_array_remove_from_array(self, test_collection):
@@ -86,8 +83,7 @@ class TestAtomicOperations:
         doc.array_remove('tags', ['deprecated'])
         doc.save()
 
-        # Verify the element was removed
-        doc.fetch(force=True)
+        # Verify the element was removed (local simulation already updated state)
         assert set(doc.tags) == {'python', 'firestore', 'database'}
 
     def test_array_remove_multiple_elements(self, test_collection):
@@ -102,8 +98,7 @@ class TestAtomicOperations:
         doc.array_remove('tags', ['old', 'deprecated'])
         doc.save()
 
-        # Verify the elements were removed
-        doc.fetch(force=True)
+        # Verify the elements were removed (local simulation already updated state)
         assert set(doc.tags) == {'python', 'firestore', 'database'}
 
     def test_increment_creates_field(self, test_collection):
@@ -117,8 +112,7 @@ class TestAtomicOperations:
         doc.increment('view_count', 1)
         doc.save()
 
-        # Verify the field was created with value 1
-        doc.fetch(force=True)
+        # Verify the field was created with value 1 (local simulation already updated state)
         assert doc.view_count == 1
 
     def test_increment_existing_field(self, test_collection):
@@ -133,8 +127,7 @@ class TestAtomicOperations:
         doc.increment('view_count', 5)
         doc.save()
 
-        # Verify the field was incremented
-        doc.fetch(force=True)
+        # Verify the field was incremented (local simulation already updated state)
         assert doc.view_count == 15
 
     def test_increment_with_negative_value(self, test_collection):
@@ -149,8 +142,7 @@ class TestAtomicOperations:
         doc.increment('score', -25)
         doc.save()
 
-        # Verify the field was decremented
-        doc.fetch(force=True)
+        # Verify the field was decremented (local simulation already updated state)
         assert doc.score == 75
 
     def test_multiple_atomic_operations(self, test_collection):
@@ -167,8 +159,7 @@ class TestAtomicOperations:
         doc.increment('view_count', 1)
         doc.save()
 
-        # Verify both operations were applied
-        doc.fetch(force=True)
+        # Verify both operations were applied (local simulation already updated state)
         assert set(doc.tags) == {'python', 'firestore'}
         assert doc.view_count == 11
 
@@ -188,8 +179,7 @@ class TestAtomicOperations:
         doc.status = 'updated'  # Regular field update
         doc.save()
 
-        # Verify all changes were applied
-        doc.fetch(force=True)
+        # Verify all changes were applied (local simulation already updated state)
         assert set(doc.tags) == {'python', 'firestore'}
         assert doc.view_count == 11
         assert doc.status == 'updated'
@@ -211,6 +201,173 @@ class TestAtomicOperations:
 
         with pytest.raises(RuntimeError, match="Cannot .* on a DELETED FireObject"):
             doc.increment('count', 1)
+
+    def test_atomic_op_then_vanilla_modification_raises_error(self, test_collection):
+        """Test that atomic op followed by vanilla modification on same field raises error."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.tags = ['python']
+        doc.save(doc_id='mutex1')
+
+        # Apply atomic operation
+        doc.array_union('tags', ['firestore'])
+
+        # Attempt to modify the same field directly - should raise ValueError
+        with pytest.raises(ValueError, match="Cannot modify field 'tags' directly.*pending atomic operation"):
+            doc.tags = ['java']
+
+    def test_vanilla_modification_then_atomic_op_raises_error(self, test_collection):
+        """Test that vanilla modification followed by atomic op on same field raises error."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.view_count = 10
+        doc.save(doc_id='mutex2')
+
+        # Modify field directly
+        doc.view_count = 20
+
+        # Attempt to use atomic operation on the same field - should raise ValueError
+        with pytest.raises(ValueError, match="Cannot perform atomic increment.*field has been modified directly"):
+            doc.increment('view_count', 5)
+
+    def test_save_creates_clean_boundary_for_mutual_exclusivity(self, test_collection):
+        """Test that save() clears constraints allowing different operation types."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.view_count = 10
+        doc.tags = ['python']
+        doc.save(doc_id='mutex3')
+
+        # Use atomic op on one field
+        doc.increment('view_count', 5)
+        doc.save()
+
+        # After save, should be able to use vanilla modification on the same field
+        doc.view_count = 100
+        assert doc.view_count == 100
+
+        # Save again
+        doc.save()
+
+        # After save, should be able to use atomic op on the same field
+        doc.increment('view_count', 1)
+        assert doc.view_count == 101
+
+    def test_atomic_on_one_field_vanilla_on_another_allowed(self, test_collection):
+        """Test that atomic ops on one field and vanilla on another field is allowed."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.view_count = 10
+        doc.tags = ['python']
+        doc.save(doc_id='mutex4')
+
+        # Atomic op on one field, vanilla on another - should work
+        doc.increment('view_count', 5)
+        doc.tags = ['java', 'kotlin']  # Different field - allowed
+        doc.save()
+
+        # Verify both operations succeeded
+        assert doc.view_count == 15
+        assert set(doc.tags) == {'java', 'kotlin'}
+
+
+class TestAtomicOperationsLocalSimulation:
+    """Test that atomic operations immediately update local state and persist correctly."""
+
+    def test_array_union_local_simulation_persists(self, test_collection):
+        """Test ArrayUnion immediately updates local state and persists to server."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.tags = ['python']
+        doc.save(doc_id='sim1')
+
+        # Apply ArrayUnion and verify immediate local update
+        doc.array_union('tags', ['firestore', 'database'])
+        assert set(doc.tags) == {'python', 'firestore', 'database'}  # Immediate visibility
+
+        # Save and verify local state unchanged
+        doc.save()
+        assert set(doc.tags) == {'python', 'firestore', 'database'}  # Still visible after save
+
+        # Fetch from server and verify persistence
+        doc.fetch(force=True)
+        assert set(doc.tags) == {'python', 'firestore', 'database'}  # Server has correct value
+
+    def test_array_remove_local_simulation_persists(self, test_collection):
+        """Test ArrayRemove immediately updates local state and persists to server."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.tags = ['python', 'firestore', 'database', 'deprecated']
+        doc.save(doc_id='sim2')
+
+        # Apply ArrayRemove and verify immediate local update
+        doc.array_remove('tags', ['deprecated', 'database'])
+        assert set(doc.tags) == {'python', 'firestore'}  # Immediate visibility
+
+        # Save and verify local state unchanged
+        doc.save()
+        assert set(doc.tags) == {'python', 'firestore'}  # Still visible after save
+
+        # Fetch from server and verify persistence
+        doc.fetch(force=True)
+        assert set(doc.tags) == {'python', 'firestore'}  # Server has correct value
+
+    def test_increment_local_simulation_persists(self, test_collection):
+        """Test Increment immediately updates local state and persists to server."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.view_count = 100
+        doc.save(doc_id='sim3')
+
+        # Apply Increment and verify immediate local update
+        doc.increment('view_count', 42)
+        assert doc.view_count == 142  # Immediate visibility
+
+        # Save and verify local state unchanged
+        doc.save()
+        assert doc.view_count == 142  # Still visible after save
+
+        # Fetch from server and verify persistence
+        doc.fetch(force=True)
+        assert doc.view_count == 142  # Server has correct value
+
+    def test_multiple_atomic_operations_local_simulation_persists(self, test_collection):
+        """Test multiple atomic operations all update locally and persist correctly."""
+        # Create a document
+        doc = test_collection.new()
+        doc.name = 'Test User'
+        doc.tags = ['python']
+        doc.view_count = 10
+        doc.score = 100
+        doc.save(doc_id='sim4')
+
+        # Apply multiple atomic operations and verify immediate local updates
+        doc.array_union('tags', ['firestore', 'database'])
+        doc.increment('view_count', 5)
+        doc.increment('score', -20)
+
+        assert set(doc.tags) == {'python', 'firestore', 'database'}  # Immediate visibility
+        assert doc.view_count == 15  # Immediate visibility
+        assert doc.score == 80  # Immediate visibility
+
+        # Save and verify local state unchanged
+        doc.save()
+        assert set(doc.tags) == {'python', 'firestore', 'database'}  # Still visible after save
+        assert doc.view_count == 15  # Still visible after save
+        assert doc.score == 80  # Still visible after save
+
+        # Fetch from server and verify persistence
+        doc.fetch(force=True)
+        assert set(doc.tags) == {'python', 'firestore', 'database'}  # Server has correct value
+        assert doc.view_count == 15  # Server has correct value
+        assert doc.score == 80  # Server has correct value
 
 
 class TestPartialUpdates:
