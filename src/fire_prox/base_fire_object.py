@@ -283,6 +283,7 @@ class BaseFireObject:
         Internal attributes (starting with _) are stored directly on object.
 
         Phase 2: Track field-level changes for efficient partial updates.
+        Phase 3: Wrap dicts and lists in ProxiedMap/ProxiedList for mutation tracking.
         """
         # Internal attributes bypass _data storage
         if name in self._INTERNAL_ATTRS:
@@ -297,8 +298,12 @@ class BaseFireObject:
         if not hasattr(self, '_data'):
             object.__setattr__(self, name, value)
         else:
+            # Phase 3: Wrap dicts and lists in proxies for mutation tracking
+            from .proxied_map import _wrap_value
+            wrapped_value = _wrap_value(value, parent=self, field_path=name, depth=0)
+
             # Store in _data and track in dirty fields
-            self._data[name] = value
+            self._data[name] = wrapped_value
             self._dirty_fields.add(name)
             # If this field was marked for deletion, remove it from deleted set
             self._deleted_fields.discard(name)
@@ -327,10 +332,12 @@ class BaseFireObject:
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        Return shallow copy of internal data.
+        Return unwrapped copy of internal data.
+
+        Phase 3: Recursively unwraps ProxiedMap and ProxiedList back to plain dicts/lists.
 
         Returns:
-            Dictionary containing all document fields.
+            Dictionary containing all document fields (unwrapped).
 
         Raises:
             RuntimeError: If object is in ATTACHED state (data not loaded).
@@ -338,7 +345,9 @@ class BaseFireObject:
         if self._state == State.ATTACHED:
             raise RuntimeError("Cannot call to_dict() on ATTACHED FireObject. Call fetch() first.")
 
-        return dict(self._data)
+        # Phase 3: Unwrap proxies back to plain Python types
+        from .proxied_map import _unwrap_value
+        return {key: _unwrap_value(value) for key, value in self._data.items()}
 
     def __repr__(self) -> str:
         """Return detailed string representation."""
@@ -398,14 +407,36 @@ class BaseFireObject:
         # Add all current fields to dirty set as a fallback
         self._dirty_fields.update(self._data.keys())
 
+    def _mark_field_dirty(self, field_path: str) -> None:
+        """Mark a specific field as dirty (has unsaved changes).
+
+        This method is called by ProxiedMap and ProxiedList when nested
+        values are mutated. The field_path is the top-level field name,
+        and the entire field will be saved on the next save() call.
+
+        Phase 3 feature.
+
+        Args:
+            field_path: Top-level field name (e.g., 'settings' or 'tags').
+        """
+        self._dirty_fields.add(field_path)
+
     def _transition_to_loaded(self, data: Dict[str, Any]) -> None:
         """
         Transition to LOADED state with given data.
 
+        Phase 3: Wraps dicts and lists in proxies for mutation tracking.
+
         Args:
             data: Document data dictionary.
         """
-        object.__setattr__(self, '_data', data)
+        # Phase 3: Wrap all nested dicts and lists in proxies
+        from .proxied_map import _wrap_value
+        wrapped_data = {}
+        for key, value in data.items():
+            wrapped_data[key] = _wrap_value(value, parent=self, field_path=key, depth=0)
+
+        object.__setattr__(self, '_data', wrapped_data)
         object.__setattr__(self, '_state', State.LOADED)
         # Clear dirty tracking (Phase 2: field-level tracking)
         self._dirty_fields.clear()

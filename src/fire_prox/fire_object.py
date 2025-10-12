@@ -197,8 +197,12 @@ class FireObject(BaseFireObject):
             else:
                 doc_ref = collection_ref.document()
 
+            # Phase 3: Unwrap proxies before sending to Firestore
+            from .proxied_map import _unwrap_value
+            unwrapped_data = {key: _unwrap_value(value) for key, value in self._data.items()}
+
             # Save data to Firestore
-            doc_ref.set(self._data)
+            doc_ref.set(unwrapped_data)
 
             # Update internal state
             object.__setattr__(self, '_doc_ref', doc_ref)
@@ -214,12 +218,15 @@ class FireObject(BaseFireObject):
                 return self
 
             # Phase 2: Perform efficient partial update
+            # Phase 3: Unwrap proxies before sending to Firestore
+            from .proxied_map import _unwrap_value
+
             # Build update dict with modified fields
             update_dict = {}
 
-            # Add modified fields
+            # Add modified fields (unwrap proxies)
             for field in self._dirty_fields:
-                update_dict[field] = self._data[field]
+                update_dict[field] = _unwrap_value(self._data[field])
 
             # Add deleted fields with DELETE_FIELD sentinel
             for field in self._deleted_fields:
@@ -239,8 +246,12 @@ class FireObject(BaseFireObject):
 
         # Handle ATTACHED state - set data
         if self._state == State.ATTACHED:
+            # Phase 3: Unwrap proxies before sending to Firestore
+            from .proxied_map import _unwrap_value
+            unwrapped_data = {key: _unwrap_value(value) for key, value in self._data.items()}
+
             # For ATTACHED, we can just do a set operation
-            self._doc_ref.set(self._data)
+            self._doc_ref.set(unwrapped_data)
             object.__setattr__(self, '_state', State.LOADED)
             self._mark_clean()
             return self

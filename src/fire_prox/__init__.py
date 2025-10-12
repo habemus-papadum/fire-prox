@@ -89,7 +89,7 @@ from .async_fire_query import AsyncFireQuery
 # Shared
 from .state import State
 
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 
 __all__ = [
     # Sync API

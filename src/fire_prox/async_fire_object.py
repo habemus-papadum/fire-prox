@@ -186,8 +186,12 @@ class AsyncFireObject(BaseFireObject):
             else:
                 doc_ref = collection_ref.document()
 
+            # Phase 3: Unwrap proxies before sending to Firestore
+            from .proxied_map import _unwrap_value
+            unwrapped_data = {key: _unwrap_value(value) for key, value in self._data.items()}
+
             # Async save
-            await doc_ref.set(self._data)
+            await doc_ref.set(unwrapped_data)
 
             # Update state
             object.__setattr__(self, '_doc_ref', doc_ref)
@@ -198,13 +202,16 @@ class AsyncFireObject(BaseFireObject):
         # ATTACHED/LOADED: Update if dirty
         if self.is_dirty():
             # Phase 2: Perform efficient partial update for LOADED state
+            # Phase 3: Unwrap proxies before sending to Firestore
+            from .proxied_map import _unwrap_value
+
             if self._state == State.LOADED:
                 # Build update dict with modified and deleted fields
                 update_dict = {}
 
-                # Add modified fields
+                # Add modified fields (unwrap proxies)
                 for field in self._dirty_fields:
-                    update_dict[field] = self._data[field]
+                    update_dict[field] = _unwrap_value(self._data[field])
 
                 # Add deleted fields with DELETE_FIELD sentinel
                 for field in self._deleted_fields:
@@ -218,7 +225,9 @@ class AsyncFireObject(BaseFireObject):
                 await self._doc_ref.update(update_dict)
             else:
                 # ATTACHED state: use .set() for full overwrite
-                await self._doc_ref.set(self._data)
+                # Unwrap proxies before sending to Firestore
+                unwrapped_data = {key: _unwrap_value(value) for key, value in self._data.items()}
+                await self._doc_ref.set(unwrapped_data)
 
             self._mark_clean()
 

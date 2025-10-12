@@ -1,8 +1,8 @@
 # FireProx Project Status
 
 **Last Updated**: 2025-10-12
-**Current Version**: 0.4.0
-**Phase**: Phase 2.5 Complete ✅ (Query Builder)
+**Current Version**: 0.5.0
+**Phase**: Phase 3 Complete ✅ (Nested Mutation Tracking)
 
 ---
 
@@ -31,16 +31,27 @@
 - ✅ **Atomic Operations** - ArrayUnion, ArrayRemove, Increment
 - ✅ **Query Builder** - Chainable `.where().order_by().limit()` interface (Phase 2.5)
 
+### Phase 3: Nested Mutation Tracking ✅ Complete
+
+- ✅ **ProxiedMap** - Transparent dictionary proxy with automatic mutation tracking
+- ✅ **ProxiedList** - Transparent list proxy with automatic mutation tracking
+- ✅ **Firestore Constraints** - Runtime validation of field names, nesting depth
+- ✅ **Conservative Saving** - Entire fields saved when nested values change
+- ✅ **Recursive Wrapping** - Works at any depth, handles mixed structures
+- ✅ **Both APIs** - Full synchronous + asynchronous support
+
 ### Test Coverage
 
 | Category | Count | Status |
 |----------|-------|--------|
-| **Total Tests** | 321 | ✅ 100% passing |
-| **Sync Integration** | 62 | ✅ |
-| **Async Integration** | 61 | ✅ |
-| **Unit Tests** | 198 | ✅ |
+| **Total Tests** | 398 | ✅ 100% passing |
+| **Sync Integration** | 80 | ✅ |
+| **Async Integration** | 78 | ✅ |
+| **Unit Tests** | 240 | ✅ |
 | **Phase 2 Integration** | 37 | ✅ |
-| **Phase 2.5 Integration** | 53 | ✅ (new) |
+| **Phase 2.5 Integration** | 53 | ✅ |
+| **Phase 3 Unit Tests** | 42 | ✅ (new) |
+| **Phase 3 Integration** | 35 | ✅ (new) |
 
 ### Documentation
 
@@ -50,8 +61,10 @@
 - ✅ Phase 1 Evaluation Report (planned vs actual)
 - ✅ Phase 2 Implementation Report (23KB, comprehensive)
 - ✅ Phase 2 Demo Notebook (sync + async examples)
-- ✅ **Phase 2.5 Implementation Report** (30KB, query builder)
-- ✅ **Phase 2.5 Demo Notebook** (query builder examples)
+- ✅ Phase 2.5 Implementation Report (30KB, query builder)
+- ✅ Phase 2.5 Demo Notebook (query builder examples)
+- ✅ **Phase 3 Implementation Report** (35KB, nested mutation tracking)
+- ✅ **Phase 3 Demo Notebook** (proxy examples, constraints)
 
 ---
 
@@ -182,58 +195,10 @@ for user in users.get_all():
 
 ## What's Coming Next
 
-### Phase 3: Nested Mutation Tracking (ProxiedMap/ProxiedList)
+### Phase 4: Advanced Features (Future Work)
 
-Per Architectural Blueprint, Phase 3 focuses on transparent mutation tracking for nested data structures.
+With Phases 1-3 complete, FireProx has a solid foundation. Future phases could add:
 
-**Features**:
-
-1. **ProxiedMap Class**
-   - Wraps dictionaries
-   - Inherits from `collections.abc.MutableMapping`
-   - Tracks mutations to nested dictionaries
-   - Reports changes up to parent FireObject
-   - Enables efficient nested field updates
-
-2. **ProxiedList Class**
-   - Wraps lists/arrays
-   - Inherits from `collections.abc.MutableSequence`
-   - Tracks mutations to nested arrays
-   - Enables optimization of array operations
-   - Auto-convert mutations to ArrayUnion/ArrayRemove when possible
-
-3. **Firestore Constraint Enforcement**
-   - Validate nesting depth (Firestore 20-level limit)
-   - Validate field name characters
-   - Validate field name length
-   - Fail-fast with clear error messages
-   - Prevent runtime Firestore errors
-
-**Example Usage**:
-```python
-user = db.doc('users/ada')
-user.settings = {'notifications': {'email': True, 'sms': False}}
-user.save()
-
-# Automatic mutation tracking
-user.settings['notifications']['email'] = False
-user.save()  # Knows exactly what changed: 'settings.notifications.email'
-
-# Array mutation tracking
-user.tags = ['python', 'math']
-user.save()
-
-user.tags.append('computer-science')  # Detected!
-user.save()  # Automatically converted to ArrayUnion(['computer-science'])
-```
-
-**Estimated Effort**: 1-2 weeks
-
-**Complexity**: High (requires recursive proxy wrapping, parent-child communication)
-
----
-
-### Phase 4: Advanced Features
 
 **1. DocumentReference Auto-Hydration**
    - Automatically convert Reference fields to FireObjects on fetch
@@ -312,25 +277,27 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
 
 ## Project Health Metrics
 
-| Metric | Phase 1 | Phase 2 | Phase 2.5 | Total Change |
-|--------|---------|---------|-----------|--------------|
-| **Total Tests** | 231 | 268 | 321 | +90 (+39%) |
-| **Test Pass Rate** | 100% ✅ | 100% ✅ | 100% ✅ | Maintained |
-| **Integration Tests** | 33 | 70 | 123 | +90 (+273%) |
-| **Code Quality** | Good | Good | Excellent | ⬆️ |
-| **Documentation** | 4 docs | 6 docs | 8 docs | +4 |
-| **Performance** | Baseline | **50-90% better** | **50-90% better** | 🚀 |
+| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 3 | Total Change |
+|--------|---------|---------|-----------|---------|--------------|
+| **Total Tests** | 231 | 268 | 321 | 398 | +167 (+72%) |
+| **Test Pass Rate** | 100% ✅ | 100% ✅ | 100% ✅ | 100% ✅ | Maintained |
+| **Integration Tests** | 33 | 70 | 123 | 158 | +125 (+379%) |
+| **Code Quality** | Good | Good | Excellent | Excellent | ⬆️ |
+| **Documentation** | 4 docs | 6 docs | 8 docs | 10 docs | +6 |
+| **Performance** | Baseline | **50-90% better** | **50-90% better** | **50-90% better** | 🚀 |
 
-### Phase 2 & 2.5 Achievements
+### Phase 2, 2.5 & 3 Achievements
 
-- ✅ **+90 integration tests** (39% increase in total tests)
-- ✅ **+7 new classes** (FireQuery, AsyncFireQuery, and Phase 2 additions)
-- ✅ **+8 new methods** (where, order_by, limit, get_all, array_union, array_remove, increment, collection)
+- ✅ **+167 tests** (72% increase from Phase 1)
+- ✅ **+9 new classes** (FireQuery, AsyncFireQuery, ProxiedMap, ProxiedList, FirestoreConstraintError, and Phase 2 additions)
+- ✅ **+9 new methods** (where, order_by, limit, get_all, array_union, array_remove, increment, collection, _mark_field_dirty)
 - ✅ **50-90% bandwidth reduction** from partial updates
 - ✅ **70% code reduction** in query operations
+- ✅ **Automatic nested tracking** eliminates manual dirty management
+- ✅ **Firestore constraint enforcement** prevents runtime errors
 - ✅ **Concurrency-safe** atomic operations eliminate race conditions
 - ✅ **Zero breaking changes** (100% backward compatible)
-- ✅ **53KB total documentation** (two comprehensive reports)
+- ✅ **88KB total documentation** (three comprehensive reports)
 
 ---
 
@@ -373,6 +340,12 @@ query = users.where('country', '==', 'England').order_by('score').limit(10)
 for top_user in query.get():
     print(top_user.name)
 
+# Phase 3 nested mutation tracking
+user.settings = {'theme': 'dark', 'notifications': {'email': True}}
+user.save()
+user.settings['theme'] = 'light'          # Automatically tracked!
+user.save()
+
 # Subcollections
 posts = user.collection('posts')
 post = posts.new()
@@ -382,7 +355,7 @@ post.save()
 
 ### For Existing Users (Upgrade Guide)
 
-Phase 2 and 2.5 are **100% backward compatible**. All existing code continues to work with automatic performance improvements.
+Phases 2, 2.5, and 3 are **100% backward compatible**. All existing code continues to work with automatic improvements.
 
 **What's New**:
 ```python
@@ -404,10 +377,17 @@ comments = post.collection('comments')
 query = users.where('birth_year', '>', 1800).order_by('score').limit(10)
 for user in query.get():
     print(user.name)
+
+# Nested mutation tracking (Phase 3)
+user.settings = {'theme': 'dark'}
+user.settings['theme'] = 'light'  # Automatically tracked!
+user.save()
 ```
 
-**Performance Benefits** (automatic):
+**Automatic Benefits**:
 - Partial updates reduce bandwidth by 50-90%
+- Nested mutations tracked transparently
+- Firestore constraints enforced at assignment
 - No code changes required for existing projects!
 
 ### For Contributors
@@ -422,12 +402,13 @@ uv sync
 ./test.sh
 
 # View demos
-jupyter notebook docs/demos/phase2_5/demo.ipynb
+jupyter notebook docs/demos/phase3/demo.ipynb
 
 # Read architecture and implementation reports
 open docs/Architectural_Blueprint.md
 open docs/PHASE2_IMPLEMENTATION_REPORT.md
 open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
+open docs/PHASE3_IMPLEMENTATION_REPORT.md
 ```
 
 ---
@@ -437,7 +418,8 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 ### Documentation
 
 - **[Architectural Blueprint](Architectural_Blueprint.md)** - Complete vision and design philosophy
-- **[Phase 2.5 Implementation Report](PHASE2_5_IMPLEMENTATION_REPORT.md)** - **NEW!** Query builder docs (30KB)
+- **[Phase 3 Implementation Report](PHASE3_IMPLEMENTATION_REPORT.md)** - **NEW!** Nested mutation tracking (35KB)
+- **[Phase 2.5 Implementation Report](PHASE2_5_IMPLEMENTATION_REPORT.md)** - Query builder docs (30KB)
 - **[Phase 2 Implementation Report](PHASE2_IMPLEMENTATION_REPORT.md)** - Detailed Phase 2 documentation (23KB)
 - [Phase 1 Implementation Summary](PHASE1_IMPLEMENTATION_SUMMARY.md) - Phase 1 details
 - [Phase 1 Evaluation Report](phase1_evaluation_report.md) - Architecture analysis
@@ -445,8 +427,11 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ### Test Examples
 
-- `tests/test_fire_query.py` - **NEW!** Phase 2.5 sync query tests
-- `tests/test_async_fire_query.py` - **NEW!** Phase 2.5 async query tests
+- `tests/test_phase3_proxies.py` - **NEW!** Phase 3 unit tests (42 tests)
+- `tests/test_integration_phase3.py` - **NEW!** Phase 3 sync integration tests (18 tests)
+- `tests/test_integration_phase3_async.py` - **NEW!** Phase 3 async integration tests (17 tests)
+- `tests/test_fire_query.py` - Phase 2.5 sync query tests
+- `tests/test_async_fire_query.py` - Phase 2.5 async query tests
 - `tests/test_integration_phase2.py` - Phase 2 sync integration tests
 - `tests/test_integration_phase2_async.py` - Phase 2 async integration tests
 - `tests/test_integration_phase1.py` - Phase 1 test patterns
@@ -454,7 +439,8 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ### Live Demos
 
-- `docs/demos/phase2_5/demo.ipynb` - **NEW!** Phase 2.5 query builder demo
+- `docs/demos/phase3/demo.ipynb` - **NEW!** Phase 3 nested mutation tracking demo
+- `docs/demos/phase2_5/demo.ipynb` - Phase 2.5 query builder demo
 - `docs/demos/phase2/demo.ipynb` - Phase 2 feature showcase (sync & async)
 - `docs/demos/phase1/sync.ipynb` - Phase 1 sync examples
 - `docs/demos/phase1/async.ipynb` - Phase 1 async examples
@@ -488,32 +474,37 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ## Summary
 
-**Phase 2.5 Status**: ✅ **100% Complete** (All 5 Phase 2 tasks done!)
+**Phase 3 Status**: ✅ **100% Complete** (Nested Mutation Tracking!)
 
-**Completed**:
-- ✅ Field-level dirty tracking
-- ✅ Partial updates with .update()
-- ✅ Subcollection support (.collection())
-- ✅ Atomic operations (array_union, array_remove, increment)
-- ✅ **Query builder** (where, order_by, limit, get, stream)
-- ✅ 90 new integration tests (39% increase)
-- ✅ 53KB total documentation
-- ✅ 2 comprehensive demo notebooks
+**Completed Phases**:
+- ✅ Phase 1: Core FireObject and state machine
+- ✅ Phase 2: Field-level dirty tracking, partial updates, atomic operations, subcollections
+- ✅ Phase 2.5: Query builder with chainable interface
+- ✅ Phase 3: **Nested mutation tracking with ProxiedMap/ProxiedList**
 
-**Performance Gains**:
+**Phase 3 Highlights**:
+- ✅ **ProxiedMap & ProxiedList** - Transparent mutation tracking for nested structures
+- ✅ **Firestore Constraints** - Runtime validation prevents errors
+- ✅ **Conservative Saving** - Data integrity guaranteed
+- ✅ **77 new tests** (42 unit + 35 integration, 100% passing)
+- ✅ **35KB implementation report** + comprehensive demo notebook
+- ✅ **Zero breaking changes** - full backward compatibility
+
+**Cumulative Performance Gains**:
 - **50-90% bandwidth reduction** from partial updates
 - **70% code reduction** in query operations
+- **Automatic nested tracking** eliminates manual dirty management
+- **Firestore constraint enforcement** prevents runtime errors
 - **Concurrency-safe operations** eliminate race conditions
 - **Memory-efficient streaming** for large result sets
-- **Lower Firestore costs** from reduced data transfer
 - **Zero breaking changes** - full backward compatibility
 
 **Next Steps**:
-1. Begin Phase 3 (ProxiedMap/ProxiedList) - ~1-2 weeks
+1. Consider Phase 4 features (Reference auto-hydration, batch operations)
 2. Add pagination cursors (.start_after(), .end_before())
 3. Continue documentation and examples
 
-**Production Readiness**: ✅ Phase 1 + Phase 2 + Phase 2.5 are production-ready!
+**Production Readiness**: ✅ Phases 1, 2, 2.5, and 3 are production-ready!
 
 ---
 
@@ -527,4 +518,4 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ---
 
-**Status Summary**: Phase 2.5 complete! All planned Phase 2 features implemented with excellent test coverage (321/321 tests passing, 100%). Query builder provides intuitive chainable interface with 70% code reduction. FireProx is production-ready for rapid prototyping with significant performance improvements (50-90% bandwidth reduction, memory-efficient streaming, concurrency-safe atomic operations). Zero breaking changes ensure smooth upgrades.
+**Status Summary**: Phase 3 complete! All core features implemented with excellent test coverage (398/398 tests passing, 100%). Nested mutation tracking via ProxiedMap/ProxiedList eliminates manual dirty management. Firestore constraint enforcement prevents runtime errors. FireProx is production-ready with significant improvements: 50-90% bandwidth reduction, 70% code reduction in queries, automatic nested tracking, and concurrency-safe operations. Zero breaking changes ensure smooth upgrades from any phase.
