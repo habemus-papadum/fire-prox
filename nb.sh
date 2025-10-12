@@ -52,6 +52,7 @@ extract_outputs() {
     local notebook="$1"
     # Extract outputs from each cell, removing execution_count and other metadata
     # We keep: output_type, text, data, name (for stream outputs)
+    # Skip cells tagged with 'nondet' (non-deterministic)
     python3 -c "
 import json
 import sys
@@ -61,6 +62,12 @@ with open('$notebook', 'r') as f:
 
 outputs = []
 for cell in nb.get('cells', []):
+    # Skip cells tagged with 'nondet' (non-deterministic outputs)
+    tags = cell.get('metadata', {}).get('tags', [])
+    if 'nondet' in tags:
+        outputs.append([])  # Add empty list to maintain cell indexing
+        continue
+
     cell_outputs = []
     for output in cell.get('outputs', []):
         # Create a cleaned output dict with just the content
@@ -113,8 +120,11 @@ echo "Running notebook with Firebase emulators: $NOTEBOOK_PATH"
 echo "Command: $JUPYTER_CMD"
 echo ""
 
+# Set NOTEBOOK_CI to indicate running in CI/test environment
+export NOTEBOOK_CI=1
+
 # Execute the command with Firebase emulators
-pnpm exec firebase emulators:exec --config firebase.developer.json "$JUPYTER_CMD"
+pnpm exec firebase emulators:exec "$JUPYTER_CMD"
 
 # Capture exit code
 EXIT_CODE=$?

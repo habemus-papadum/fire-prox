@@ -83,6 +83,14 @@ class AsyncFireProx(BaseFireProx):
 
         super().__init__(client)
 
+            # Create companion sync client for lazy loading
+        # Both clients point to the same Firestore backend
+        from google.cloud import firestore
+        self._sync_client = firestore.Client(
+            project=client.project,
+            database=client._database
+        )
+
     # =========================================================================
     # Document Access
     # =========================================================================
@@ -92,7 +100,7 @@ class AsyncFireProx(BaseFireProx):
         Get a reference to a document by its full path.
 
         Creates an AsyncFireObject in ATTACHED state. No data is fetched from
-        Firestore until fetch() is called.
+        Firestore until fetch() is called or an attribute is accessed (lazy loading).
 
         Args:
             path: The full document path, e.g., 'users/alovelace' or
@@ -106,9 +114,14 @@ class AsyncFireProx(BaseFireProx):
             ValueError: If path has an odd number of segments.
 
         Example:
-            # Root-level document
+            # Root-level document with lazy loading
+            user = db.doc('users/alovelace')
+            print(user.name)  # Triggers automatic fetch
+
+            # Or explicit fetch
             user = db.doc('users/alovelace')
             await user.fetch()
+            print(user.name)
 
             # Nested document (subcollection)
             post = db.doc('users/alovelace/posts/post123')
@@ -116,10 +129,13 @@ class AsyncFireProx(BaseFireProx):
         """
         self._validate_path(path, 'document')
 
-        doc_ref = self._client.document(path)
+        # Create both async and sync doc refs
+        async_doc_ref = self._client.document(path)
+        sync_doc_ref = self._sync_client.document(path)
 
         return AsyncFireObject(
-            doc_ref=doc_ref,
+            doc_ref=async_doc_ref,
+            sync_doc_ref=sync_doc_ref,
             initial_state=State.ATTACHED,
             parent_collection=None
         )
@@ -176,7 +192,8 @@ class AsyncFireProx(BaseFireProx):
 
         return AsyncFireCollection(
             collection_ref=collection_ref,
-            client=self
+            client=self,
+            sync_client=self._sync_client
         )
 
     # =========================================================================

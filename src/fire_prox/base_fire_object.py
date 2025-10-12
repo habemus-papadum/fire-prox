@@ -31,7 +31,7 @@ class BaseFireObject:
 
     # Class-level constants for internal attribute names
     _INTERNAL_ATTRS = {
-        '_doc_ref', '_data', '_state', '_dirty', '_parent_collection',
+        '_doc_ref', '_sync_doc_ref', '_data', '_state', '_dirty', '_parent_collection',
         '_client', '_id', '_path'
     }
 
@@ -39,7 +39,8 @@ class BaseFireObject:
         self,
         doc_ref: Optional[DocumentReference] = None,
         initial_state: Optional[State] = None,
-        parent_collection: Optional[Any] = None
+        parent_collection: Optional[Any] = None,
+        sync_doc_ref: Optional[DocumentReference] = None
     ):
         """
         Initialize a FireObject.
@@ -50,9 +51,11 @@ class BaseFireObject:
                           ATTACHED if doc_ref provided).
             parent_collection: Optional reference to parent FireCollection
                              (needed for save() on DETACHED objects).
+            sync_doc_ref: Optional sync DocumentReference (for async lazy loading).
         """
         # Set internal attributes directly to avoid __setattr__ logic
         object.__setattr__(self, '_doc_ref', doc_ref)
+        object.__setattr__(self, '_sync_doc_ref', sync_doc_ref)
         object.__setattr__(self, '_data', {})
         object.__setattr__(self, '_parent_collection', parent_collection)
 

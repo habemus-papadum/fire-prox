@@ -71,7 +71,8 @@ class AsyncFireCollection(BaseFireCollection):
         Get a reference to a specific document in this collection.
 
         Creates an AsyncFireObject in ATTACHED state pointing to a specific
-        document. No data is fetched until fetch() is called.
+        document. No data is fetched until fetch() is called or an attribute is
+        accessed (lazy loading).
 
         Args:
             doc_id: The document ID within this collection.
@@ -82,12 +83,18 @@ class AsyncFireCollection(BaseFireCollection):
         Example:
             users = db.collection('users')
             user = users.doc('alovelace')  # ATTACHED state
-            await user.fetch()
-            print(user.name)  # Now can access data
+            print(user.name)  # Triggers automatic fetch (lazy loading)
         """
-        doc_ref = self._collection_ref.document(doc_id)
+        # Create both async and sync doc refs
+        async_doc_ref = self._collection_ref.document(doc_id)
+        sync_doc_ref = None
+        if self._sync_client:
+            sync_collection_ref = self._sync_client.collection(self.path)
+            sync_doc_ref = sync_collection_ref.document(doc_id)
+
         return AsyncFireObject(
-            doc_ref=doc_ref,
+            doc_ref=async_doc_ref,
+            sync_doc_ref=sync_doc_ref,
             initial_state=State.ATTACHED,
             parent_collection=self
         )

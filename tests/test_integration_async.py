@@ -252,23 +252,67 @@ class TestAsyncIntegration:
         assert user.is_loaded()
 
     @pytest.mark.asyncio
-    async def test_no_lazy_loading_on_attached(self, async_db, async_users_collection, sample_user_data):
-        """Test that ATTACHED objects don't support lazy loading (must fetch explicitly)."""
+    async def test_lazy_loading_on_attached(self, async_db, async_users_collection, sample_user_data):
+        """Test that ATTACHED objects support lazy loading via threading."""
         # Create document
-        doc_ref = async_users_collection._collection_ref.document('test')
+        doc_ref = async_users_collection._collection_ref.document('lazytest')
         await doc_ref.set(sample_user_data)
 
         # Get ATTACHED object
-        user = async_db.doc('users/test')
+        user = async_db.doc('users/lazytest')
         assert user.state == State.ATTACHED
 
-        # Accessing attribute should raise (no lazy loading in async)
-        with pytest.raises(AttributeError, match="Call await fetch()"):
-            _ = user.name
+        # Accessing attribute triggers lazy loading (via thread)
+        name = user.name  # This should work now!
+        assert name == 'Ada Lovelace'
 
-        # Must explicitly fetch
-        await user.fetch()
-        assert user.name == 'Ada Lovelace'
+        # Object should now be LOADED
+        assert user.state == State.LOADED
+        assert user.is_loaded()
+
+        # Subsequent accesses should be instant (no more fetching)
+        year = user.year
+        assert year == 1815
+
+        # All data should be accessible
+        assert user.occupation == 'Mathematician'
+
+    @pytest.mark.asyncio
+    async def test_lazy_loading_only_fetches_once(self, async_db, async_users_collection, sample_user_data):
+        """Test that lazy loading only fetches once, then caches data."""
+        # Create document
+        doc_ref = async_users_collection._collection_ref.document('cachetest')
+        await doc_ref.set(sample_user_data)
+
+        # Get ATTACHED object
+        user = async_db.doc('users/cachetest')
+        assert user.state == State.ATTACHED
+
+        # First attribute access triggers fetch
+        _ = user.name
+        assert user.state == State.LOADED
+
+        # Modify document externally (should not affect cached data)
+        await doc_ref.update({'name': 'Changed Name'})
+
+        # Accessing cached attributes should return original values
+        assert user.name == 'Ada Lovelace'  # Still cached value
+
+        # Force refresh to see new data
+        await user.fetch(force=True)
+        assert user.name == 'Changed Name'
+
+    @pytest.mark.asyncio
+    async def test_lazy_loading_error_handling(self, async_db):
+        """Test that lazy loading properly handles non-existent documents."""
+        # Get reference to non-existent document
+        user = async_db.doc('users/nonexistent')
+        assert user.state == State.ATTACHED
+
+        # Accessing attribute should raise NotFound
+        from google.cloud.exceptions import NotFound
+        with pytest.raises(NotFound):
+            _ = user.name
 
 
 class TestAsyncEdgeCases:
