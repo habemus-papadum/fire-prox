@@ -54,7 +54,9 @@ class TestFireObjectConstruction:
         assert '_doc_ref' in internal_attrs
         assert '_data' in internal_attrs
         assert '_state' in internal_attrs
-        assert '_dirty' in internal_attrs
+        # Phase 2: field-level dirty tracking
+        assert '_dirty_fields' in internal_attrs
+        assert '_deleted_fields' in internal_attrs
         assert '_parent_collection' in internal_attrs
 
 

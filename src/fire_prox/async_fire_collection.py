@@ -63,7 +63,8 @@ class AsyncFireCollection(BaseFireCollection):
         return AsyncFireObject(
             doc_ref=None,
             initial_state=State.DETACHED,
-            parent_collection=self
+            parent_collection=self,
+            sync_client=self._sync_client
         )
 
     def doc(self, doc_id: str) -> AsyncFireObject:
@@ -95,6 +96,7 @@ class AsyncFireCollection(BaseFireCollection):
         return AsyncFireObject(
             doc_ref=async_doc_ref,
             sync_doc_ref=sync_doc_ref,
+            sync_client=self._sync_client,
             initial_state=State.ATTACHED,
             parent_collection=self
         )
