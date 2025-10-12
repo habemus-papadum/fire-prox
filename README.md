@@ -6,20 +6,20 @@
 |------------------------------------------ | -------: | -------: | ---------: | --------: |
 | src/fire\_prox/\_\_init\_\_.py            |       12 |        0 |    100.00% |           |
 | src/fire\_prox/async\_fire\_collection.py |       41 |        6 |     85.37% |     90-96 |
-| src/fire\_prox/async\_fire\_object.py     |       73 |        9 |     87.67% |89, 104, 109-110, 146, 152, 187, 229, 234 |
+| src/fire\_prox/async\_fire\_object.py     |       97 |       21 |     78.35% |89, 111, 117-121, 126-142, 179, 185, 227, 273-274, 279 |
 | src/fire\_prox/async\_fire\_query.py      |       50 |        3 |     94.00% |140, 168, 363 |
 | src/fire\_prox/async\_fireprox.py         |       26 |        2 |     92.31% |   79, 153 |
 | src/fire\_prox/base\_fire\_collection.py  |       14 |        0 |    100.00% |           |
-| src/fire\_prox/base\_fire\_object.py      |      133 |       13 |     90.23% |72, 184, 290-291, 295, 299, 304, 319, 322, 345, 405, 447, 457 |
+| src/fire\_prox/base\_fire\_object.py      |      179 |       15 |     91.62% |73, 185, 291-292, 296, 300, 318, 321, 344, 419, 511, 565, 582-583, 620 |
 | src/fire\_prox/base\_fireprox.py          |       26 |        1 |     96.15% |        93 |
 | src/fire\_prox/fire\_collection.py        |       38 |        2 |     94.74% |     94-95 |
-| src/fire\_prox/fire\_object.py            |       74 |       15 |     79.73% |83, 88, 95-96, 100, 143, 149, 195, 220, 247-254 |
+| src/fire\_prox/fire\_object.py            |       96 |       21 |     78.12% |83, 96-100, 104-107, 119, 134, 140, 189, 241, 269, 296-305 |
 | src/fire\_prox/fire\_query.py             |       47 |        3 |     93.62% |139, 167, 359 |
 | src/fire\_prox/fire\_vector.py            |       39 |        0 |    100.00% |           |
 | src/fire\_prox/fireprox.py                |       22 |        2 |     90.91% |   90, 156 |
 | src/fire\_prox/state.py                   |        8 |        0 |    100.00% |           |
 | src/fire\_prox/testing/\_\_init\_\_.py    |       86 |       23 |     73.26% |39-43, 53-55, 65-67, 78-87, 90, 103-104, 107 |
-|                                 **TOTAL** |  **689** |   **79** | **88.53%** |           |
+|                                 **TOTAL** |  **781** |   **99** | **87.32%** |           |
 
 
 ## Setup coverage badge
