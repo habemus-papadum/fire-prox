@@ -5,10 +5,10 @@ This module provides the AsyncFireProx class, which serves as the primary interf
 for users to interact with Firestore asynchronously through the FireProx API.
 """
 
-from typing import Optional
 from google.cloud.firestore import AsyncClient as AsyncFirestoreClient
-from .async_fire_object import AsyncFireObject
+
 from .async_fire_collection import AsyncFireCollection
+from .async_fire_object import AsyncFireObject
 from .base_fireprox import BaseFireProx
 from .state import State
 

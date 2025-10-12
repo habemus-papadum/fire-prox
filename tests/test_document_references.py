@@ -5,8 +5,8 @@ Tests Phase 4 Part 1: FireObject/AsyncFireObject as references.
 """
 
 import pytest
-from fire_prox.state import State
 
+from fire_prox.state import State
 
 # =========================================================================
 # Basic Reference Assignment Tests (Sync)

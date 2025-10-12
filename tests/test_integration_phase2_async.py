@@ -6,8 +6,9 @@ the Firestore emulator using async/await.
 """
 
 import pytest
-from src.fire_prox.testing import async_testing_client
+
 from src.fire_prox import AsyncFireProx
+from src.fire_prox.testing import async_testing_client
 
 
 @pytest.fixture

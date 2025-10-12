@@ -7,9 +7,9 @@ them atomically.
 """
 
 import pytest
-from google.cloud import firestore
-from src.fire_prox.testing import testing_client
+
 from src.fire_prox import FireProx
+from src.fire_prox.testing import testing_client
 
 
 @pytest.fixture

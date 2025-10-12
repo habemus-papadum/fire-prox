@@ -11,13 +11,13 @@ Tests verify:
 - State validation (DETACHED, DELETED errors)
 """
 
-import pytest
 import threading
 import time
-from google.cloud import firestore
-from fire_prox import FireProx, AsyncFireProx
-from fire_prox.testing import firestore_test_harness
 
+import pytest
+from google.cloud import firestore
+
+from fire_prox import AsyncFireProx
 
 # =========================================================================
 # Sync Tests: Document Listeners

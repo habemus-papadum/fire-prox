@@ -5,13 +5,13 @@ Tests verify collection initialization, document creation, reference handling,
 and properties as specified in Phase 1 of the architectural blueprint.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, Mock
+
 from google.cloud.firestore_v1.collection import CollectionReference
 from google.cloud.firestore_v1.document import DocumentReference
+
 from fire_prox.fire_collection import FireCollection
 from fire_prox.fire_object import FireObject
-from fire_prox.state import State
 
 
 class TestFireCollectionConstruction:
@@ -328,7 +328,6 @@ class TestFireCollectionQueryMethods:
         # Should be an iterator/generator
         assert hasattr(result, '__iter__')
         # Verify it yields FireObjects
-        from fire_prox.fire_object import FireObject
         first_item = next(result)
         assert isinstance(first_item, FireObject)
 

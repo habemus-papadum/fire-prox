@@ -5,15 +5,13 @@ Tests verify initialization, document and collection access, path validation,
 and integration with the native Firestore client.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
+
 from google.cloud.firestore import Client as FirestoreClient
 from google.cloud.firestore_v1.collection import CollectionReference
 from google.cloud.firestore_v1.document import DocumentReference
+
 from fire_prox.fireprox import FireProx
-from fire_prox.fire_object import FireObject
-from fire_prox.fire_collection import FireCollection
-from fire_prox.state import State
 
 
 class TestFireProxConstruction:

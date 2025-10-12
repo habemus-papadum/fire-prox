@@ -5,8 +5,9 @@ These tests do not require Firestore and test the FireVector wrapper logic.
 """
 
 import pytest
-from src.fire_prox.fire_vector import FireVector, MAX_DIMENSIONS
 from google.cloud.firestore_v1.vector import Vector
+
+from src.fire_prox.fire_vector import MAX_DIMENSIONS, FireVector
 
 
 class TestFireVectorCreation:

@@ -5,9 +5,10 @@ Tests verify state management, attribute handling, lifecycle methods,
 and all state transitions as specified in the architectural blueprint.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, Mock
+
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
+
 from fire_prox.fire_object import FireObject
 from fire_prox.state import State
 

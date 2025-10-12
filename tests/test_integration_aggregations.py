@@ -6,8 +6,8 @@ operations that calculate statistics without fetching all documents.
 """
 
 import pytest
-from google.cloud import firestore
-from fire_prox import FireProx, Count, Sum, Avg
+
+from fire_prox import Avg, Count, Sum
 
 
 @pytest.fixture

@@ -5,7 +5,6 @@ Tests verify that the State enum correctly represents the four possible states
 of a FireObject and provides appropriate string representations.
 """
 
-import pytest
 from fire_prox.state import State
 
 

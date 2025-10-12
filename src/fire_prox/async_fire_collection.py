@@ -5,9 +5,10 @@ This module implements the asynchronous FireCollection class for use with
 google.cloud.firestore.AsyncClient.
 """
 
-from typing import Optional, Any, AsyncIterator
-from .base_fire_collection import BaseFireCollection
+from typing import Any, AsyncIterator, Optional
+
 from .async_fire_object import AsyncFireObject
+from .base_fire_collection import BaseFireCollection
 from .state import State
 
 
@@ -143,8 +144,9 @@ class AsyncFireCollection(BaseFireCollection):
             async for user in query.stream():
                 print(user.name)
         """
-        from .async_fire_query import AsyncFireQuery
         from google.cloud.firestore_v1.base_query import FieldFilter
+
+        from .async_fire_query import AsyncFireQuery
 
         # Create initial query with filter
         filter_obj = FieldFilter(field, op, value)
@@ -168,8 +170,9 @@ class AsyncFireCollection(BaseFireCollection):
         Returns:
             An AsyncFireQuery instance for method chaining.
         """
-        from .async_fire_query import AsyncFireQuery
         from google.cloud.firestore_v1 import Query as QueryClass
+
+        from .async_fire_query import AsyncFireQuery
 
         # Convert direction string to constant
         if direction.upper() == 'ASCENDING':

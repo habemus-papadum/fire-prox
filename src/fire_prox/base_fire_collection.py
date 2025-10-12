@@ -5,7 +5,7 @@ This module contains the base class that implements all logic that is
 identical between synchronous and asynchronous FireCollection implementations.
 """
 
-from typing import Optional, Any
+from typing import Any, Optional
 
 
 class BaseFireCollection:

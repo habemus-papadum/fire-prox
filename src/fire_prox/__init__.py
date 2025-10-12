@@ -75,23 +75,22 @@ Example Usage (Asynchronous):
 """
 
 # Synchronous API
-from .fireprox import FireProx
-from .fire_object import FireObject
-from .fire_collection import FireCollection
-from .fire_query import FireQuery
+# Aggregation helpers
+from .aggregation import Avg, Count, Sum
+from .async_fire_collection import AsyncFireCollection
+from .async_fire_object import AsyncFireObject
+from .async_fire_query import AsyncFireQuery
 
 # Asynchronous API
 from .async_fireprox import AsyncFireProx
-from .async_fire_object import AsyncFireObject
-from .async_fire_collection import AsyncFireCollection
-from .async_fire_query import AsyncFireQuery
+from .fire_collection import FireCollection
+from .fire_object import FireObject
+from .fire_query import FireQuery
+from .fire_vector import FireVector
+from .fireprox import FireProx
 
 # Shared
 from .state import State
-from .fire_vector import FireVector
-
-# Aggregation helpers
-from .aggregation import Count, Sum, Avg
 
 __version__ = "0.3.0"
 

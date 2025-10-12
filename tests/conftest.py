@@ -6,9 +6,9 @@ instead of mocks, enabling true integration testing.
 """
 
 import pytest
-from fire_prox.testing import testing_client, async_testing_client, firestore_test_harness  # noqa: F401
-from fire_prox import FireProx, AsyncFireProx
 
+from fire_prox import AsyncFireProx, FireProx
+from fire_prox.testing import async_testing_client, firestore_test_harness, testing_client  # noqa: F401
 
 # =========================================================================
 # Synchronous Fixtures

@@ -20,7 +20,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-
 CLAUDE_PROJECTS_ROOT = Path.home() / ".claude" / "projects"
 DOCS_SUBDIR = Path("docs")
 SESSION_LOG_DIR_NAME = "sessionslogs"

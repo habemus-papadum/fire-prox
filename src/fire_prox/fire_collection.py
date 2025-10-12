@@ -6,8 +6,8 @@ Firestore collection and provides methods for creating new documents and
 querying existing ones.
 """
 
-from typing import Optional, Iterator, Any
-from google.cloud.firestore_v1.collection import CollectionReference
+from typing import Any, Iterator, Optional
+
 from .base_fire_collection import BaseFireCollection
 from .fire_object import FireObject
 from .state import State
@@ -150,8 +150,9 @@ class FireCollection(BaseFireCollection):
             for user in query.get():
                 print(user.name)
         """
-        from .fire_query import FireQuery
         from google.cloud.firestore_v1.base_query import FieldFilter
+
+        from .fire_query import FireQuery
 
         # Create initial query with filter
         filter_obj = FieldFilter(field, op, value)
@@ -175,8 +176,9 @@ class FireCollection(BaseFireCollection):
         Returns:
             A FireQuery instance for method chaining.
         """
-        from .fire_query import FireQuery
         from google.cloud.firestore_v1 import Query as QueryClass
+
+        from .fire_query import FireQuery
 
         # Convert direction string to constant
         if direction.upper() == 'ASCENDING':

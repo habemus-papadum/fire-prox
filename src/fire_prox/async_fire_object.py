@@ -10,7 +10,7 @@ from typing import Any, Optional
 from google.cloud import firestore
 from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
-from google.cloud.firestore_v1.document import DocumentSnapshot, DocumentReference
+from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 from google.cloud.firestore_v1.vector import Vector
 
 from .base_fire_object import BaseFireObject

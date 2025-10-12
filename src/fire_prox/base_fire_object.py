@@ -5,10 +5,12 @@ This module contains the base class that implements all logic that is
 identical between synchronous and asynchronous FireObject implementations.
 """
 
-from typing import Optional, Any, Dict, Set
-from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
+from typing import Any, Dict, Optional, Set
+
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
+from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 from google.cloud.firestore_v1.vector import Vector
+
 from .state import State
 
 
@@ -244,8 +246,8 @@ class BaseFireObject:
         subcollection_ref = self._doc_ref.collection(name)
 
         # Import here to avoid circular dependency
-        from .fire_collection import FireCollection
         from .async_fire_collection import AsyncFireCollection
+        from .fire_collection import FireCollection
 
         # Return appropriate collection type based on client type
         # The concrete class will override this if needed

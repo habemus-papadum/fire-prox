@@ -6,9 +6,10 @@ interface for users to interact with Firestore through the simplified FireProx A
 """
 
 from google.cloud.firestore import Client as FirestoreClient
+
 from .base_fireprox import BaseFireProx
-from .fire_object import FireObject
 from .fire_collection import FireCollection
+from .fire_object import FireObject
 from .state import State
 
 

@@ -6,6 +6,7 @@ a real Firestore instance (emulator).
 """
 
 import pytest
+
 from fire_prox import FireProx, State
 
 

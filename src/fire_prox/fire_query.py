@@ -6,10 +6,12 @@ Firestore Query objects and provides a chainable interface for building and
 executing queries.
 """
 
-from typing import List, Iterator, Any, Optional, Dict, Union
-from google.cloud.firestore_v1.query import Query
+from typing import Any, Dict, Iterator, List, Optional, Union
+
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.document import DocumentReference
+from google.cloud.firestore_v1.query import Query
+
 from .fire_object import FireObject
 
 
@@ -566,7 +568,7 @@ class FireQuery:
         if not aggregations:
             raise ValueError("aggregate() requires at least one aggregation")
 
-        from .aggregation import Count, Sum, Avg
+        from .aggregation import Avg, Count, Sum
 
         # Start with the first aggregation to create the AggregationQuery
         first_alias, first_agg_type = next(iter(aggregations.items()))

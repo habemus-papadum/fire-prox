@@ -6,11 +6,13 @@ Firestore AsyncQuery objects and provides a chainable interface for building and
 executing async queries.
 """
 
-from typing import List, AsyncIterator, Any, Optional, Dict, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
+
+from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.async_query import AsyncQuery
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.document import DocumentReference
-from google.cloud.firestore_v1.async_document import AsyncDocumentReference
+
 from .async_fire_object import AsyncFireObject
 
 
@@ -571,7 +573,7 @@ class AsyncFireQuery:
         if not aggregations:
             raise ValueError("aggregate() requires at least one aggregation")
 
-        from .aggregation import Count, Sum, Avg
+        from .aggregation import Avg, Count, Sum
 
         # Start with the first aggregation to create the AsyncAggregationQuery
         first_alias, first_agg_type = next(iter(aggregations.items()))

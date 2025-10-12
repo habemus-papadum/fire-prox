@@ -6,9 +6,9 @@ the async/await pattern.
 """
 
 import pytest
-from google.cloud import firestore
-from src.fire_prox.testing import async_testing_client
+
 from src.fire_prox import AsyncFireProx
+from src.fire_prox.testing import async_testing_client
 
 
 @pytest.fixture

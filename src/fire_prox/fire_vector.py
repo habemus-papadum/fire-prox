@@ -6,8 +6,8 @@ Vector type with a Pythonic interface for working with vector embeddings.
 """
 
 from typing import List, Union
-from google.cloud.firestore_v1.vector import Vector
 
+from google.cloud.firestore_v1.vector import Vector
 
 # Firestore's maximum supported embedding dimension
 MAX_DIMENSIONS = 2048
