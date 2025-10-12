@@ -17,6 +17,10 @@ nav:
     - Phase 2 Demo (Sync & Async): demos/phase2/demo.ipynb
     - Phase 2.5 Demo Query Builder: demos/phase2_5/demo.ipynb
     - Phase 3 Demo: demos/phase3/demo.ipynb
+    - Topics:
+      - Pagination: demos/topics/pagination.ipynb
+      - Dates and Timestamps: demos/topics/dates_and_timestamps.ipynb
+      - Vector Embeddings: demos/topics/vector_embeddings.ipynb
   - Architecture: Architectural_Blueprint.md
   - Implementation Log: Implementation_Log.md
   - API: reference.md

@@ -33,7 +33,8 @@ def check_emulator():
     """Check if the Firestore emulator is running."""
     try:
         host = os.environ["FIRESTORE_EMULATOR_HOST"]
-        response = requests.get(host, timeout=2)
+        url = f"http://{host}"
+        response = requests.get(url, timeout=2)
         return response.status_code == 200
     except Exception as e:
         msg = (f"Firestore emulator is not running at {host}")

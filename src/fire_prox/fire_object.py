@@ -8,6 +8,7 @@ schemaless, state-aware proxy for Firestore documents.
 from typing import Any, Optional
 from google.cloud import firestore
 from google.cloud.firestore_v1.document import DocumentSnapshot
+from google.cloud.firestore_v1.vector import Vector
 from google.cloud.exceptions import NotFound
 from .base_fire_object import BaseFireObject
 from .state import State
@@ -88,7 +89,12 @@ class FireObject(BaseFireObject):
 
         # Check if attribute exists in _data
         if name in self._data:
-            return self._data[name]
+            value = self._data[name]
+            # Convert native Vector to FireVector on retrieval
+            if isinstance(value, Vector):
+                from .fire_vector import FireVector
+                return FireVector.from_firestore_vector(value)
+            return value
 
         # Attribute not found
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")

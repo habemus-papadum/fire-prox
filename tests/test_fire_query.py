@@ -324,3 +324,180 @@ class TestEdgeCases:
         # Try to consume again - should be empty
         second_consumption = list(stream)
         assert len(second_consumption) == 0
+
+
+class TestQueryPagination:
+    """Test cursor-based pagination with start_at, start_after, end_at, end_before."""
+
+    def test_start_at_with_field_value(self, test_collection):
+        """Test start_at with field value dictionary (inclusive)."""
+        # Order by birth_year: Charles (1791), Ada (1815), John (1903), Grace (1906), Alan (1912)
+        # Start at 1903 (inclusive) - should include John, Grace, Alan
+        query = (test_collection
+                 .order_by('birth_year')
+                 .start_at({'birth_year': 1903}))
+        results = query.get()
+
+        assert len(results) == 3
+        years = [user.birth_year for user in results]
+        assert years == [1903, 1906, 1912]
+        assert results[0].name == 'John von Neumann'
+        assert results[1].name == 'Grace Hopper'
+        assert results[2].name == 'Alan Turing'
+
+    def test_start_after_excludes_cursor(self, test_collection):
+        """Test start_after excludes the cursor document (exclusive)."""
+        # Order by birth_year: Charles (1791), Ada (1815), John (1903), Grace (1906), Alan (1912)
+        # Start after 1903 (exclusive) - should include Grace, Alan only
+        query = (test_collection
+                 .order_by('birth_year')
+                 .start_after({'birth_year': 1903}))
+        results = query.get()
+
+        assert len(results) == 2
+        years = [user.birth_year for user in results]
+        assert years == [1906, 1912]
+        assert results[0].name == 'Grace Hopper'
+        assert results[1].name == 'Alan Turing'
+
+    def test_end_at_with_field_value(self, test_collection):
+        """Test end_at with field value dictionary (inclusive)."""
+        # Order by birth_year: Charles (1791), Ada (1815), John (1903), Grace (1906), Alan (1912)
+        # End at 1903 (inclusive) - should include Charles, Ada, John
+        query = (test_collection
+                 .order_by('birth_year')
+                 .end_at({'birth_year': 1903}))
+        results = query.get()
+
+        assert len(results) == 3
+        years = [user.birth_year for user in results]
+        assert years == [1791, 1815, 1903]
+        assert results[0].name == 'Charles Babbage'
+        assert results[1].name == 'Ada Lovelace'
+        assert results[2].name == 'John von Neumann'
+
+    def test_end_before_excludes_cursor(self, test_collection):
+        """Test end_before excludes the cursor document (exclusive)."""
+        # Order by birth_year: Charles (1791), Ada (1815), John (1903), Grace (1906), Alan (1912)
+        # End before 1903 (exclusive) - should include Charles, Ada only
+        query = (test_collection
+                 .order_by('birth_year')
+                 .end_before({'birth_year': 1903}))
+        results = query.get()
+
+        assert len(results) == 2
+        years = [user.birth_year for user in results]
+        assert years == [1791, 1815]
+        assert results[0].name == 'Charles Babbage'
+        assert results[1].name == 'Ada Lovelace'
+
+    def test_pagination_chain(self, test_collection):
+        """Test typical pagination pattern: order_by + limit + start_after."""
+        # Simulate pagination: get first page, then get next page
+
+        # Page 1: Get first 2 users ordered by birth year
+        page1_query = (test_collection
+                      .order_by('birth_year')
+                      .limit(2))
+        page1_results = page1_query.get()
+
+        assert len(page1_results) == 2
+        assert page1_results[0].birth_year == 1791  # Charles
+        assert page1_results[1].birth_year == 1815  # Ada
+
+        # Page 2: Start after the last document from page 1
+        last_year = page1_results[-1].birth_year
+        page2_query = (test_collection
+                      .order_by('birth_year')
+                      .start_after({'birth_year': last_year})
+                      .limit(2))
+        page2_results = page2_query.get()
+
+        assert len(page2_results) == 2
+        assert page2_results[0].birth_year == 1903  # John
+        assert page2_results[1].birth_year == 1906  # Grace
+
+        # Page 3: Start after the last document from page 2
+        last_year = page2_results[-1].birth_year
+        page3_query = (test_collection
+                      .order_by('birth_year')
+                      .start_after({'birth_year': last_year})
+                      .limit(2))
+        page3_results = page3_query.get()
+
+        assert len(page3_results) == 1  # Only Alan left
+        assert page3_results[0].birth_year == 1912  # Alan
+
+    def test_cursor_with_snapshot(self, test_collection):
+        """Test using DocumentSnapshot as cursor instead of field values."""
+        # Get all users ordered by birth year
+        query = test_collection.order_by('birth_year')
+        all_results = query.get()
+
+        # Get the document reference for the middle user (John, 1903)
+        john = [u for u in all_results if u.birth_year == 1903][0]
+        john_ref = john._doc_ref
+        john_snapshot = john_ref.get()
+
+        # Use snapshot as cursor for start_after
+        query_after = (test_collection
+                      .order_by('birth_year')
+                      .start_after(john_snapshot))
+        results_after = query_after.get()
+
+        # Should get Grace (1906) and Alan (1912)
+        assert len(results_after) == 2
+        assert results_after[0].birth_year == 1906
+        assert results_after[1].birth_year == 1912
+
+        # Use snapshot as cursor for end_at
+        query_end = (test_collection
+                    .order_by('birth_year')
+                    .end_at(john_snapshot))
+        results_end = query_end.get()
+
+        # Should get Charles (1791), Ada (1815), John (1903)
+        assert len(results_end) == 3
+        assert results_end[0].birth_year == 1791
+        assert results_end[1].birth_year == 1815
+        assert results_end[2].birth_year == 1903
+
+    def test_range_query_with_start_and_end(self, test_collection):
+        """Test combining start_at and end_at for range queries."""
+        # Get users between 1815 and 1906 (inclusive)
+        query = (test_collection
+                .order_by('birth_year')
+                .start_at({'birth_year': 1815})
+                .end_at({'birth_year': 1906}))
+        results = query.get()
+
+        assert len(results) == 3
+        years = [user.birth_year for user in results]
+        assert years == [1815, 1903, 1906]
+        assert results[0].name == 'Ada Lovelace'
+        assert results[1].name == 'John von Neumann'
+        assert results[2].name == 'Grace Hopper'
+
+    def test_descending_order_with_pagination(self, test_collection):
+        """Test pagination works with descending order."""
+        # Order descending: Alan (1912), Grace (1906), John (1903), Ada (1815), Charles (1791)
+        # Get first 2, then continue from there
+        page1_query = (test_collection
+                      .order_by('birth_year', direction='DESCENDING')
+                      .limit(2))
+        page1_results = page1_query.get()
+
+        assert len(page1_results) == 2
+        assert page1_results[0].birth_year == 1912  # Alan
+        assert page1_results[1].birth_year == 1906  # Grace
+
+        # Continue after Grace (1906)
+        page2_query = (test_collection
+                      .order_by('birth_year', direction='DESCENDING')
+                      .start_after({'birth_year': 1906})
+                      .limit(2))
+        page2_results = page2_query.get()
+
+        assert len(page2_results) == 2
+        assert page2_results[0].birth_year == 1903  # John
+        assert page2_results[1].birth_year == 1815  # Ada

@@ -88,6 +88,7 @@ from .async_fire_query import AsyncFireQuery
 
 # Shared
 from .state import State
+from .fire_vector import FireVector
 
 __version__ = "0.3.0"
 
@@ -104,4 +105,5 @@ __all__ = [
     "AsyncFireQuery",
     # Shared
     "State",
+    "FireVector",
 ]

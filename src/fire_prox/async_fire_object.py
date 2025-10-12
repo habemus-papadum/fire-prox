@@ -11,6 +11,7 @@ from google.cloud import firestore
 from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentSnapshot
+from google.cloud.firestore_v1.vector import Vector
 
 from .base_fire_object import BaseFireObject
 from .state import State
@@ -102,7 +103,12 @@ class AsyncFireObject(BaseFireObject):
         if name not in self._data:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
-        return self._data[name]
+        value = self._data[name]
+        # Convert native Vector to FireVector on retrieval
+        if isinstance(value, Vector):
+            from .fire_vector import FireVector
+            return FireVector.from_firestore_vector(value)
+        return value
 
     # =========================================================================
     # Async Lifecycle Methods

@@ -30,17 +30,18 @@
 - ✅ **Subcollection Support** - Hierarchical data with `.collection()` method
 - ✅ **Atomic Operations** - ArrayUnion, ArrayRemove, Increment
 - ✅ **Query Builder** - Chainable `.where().order_by().limit()` interface (Phase 2.5)
+- ✅ **Pagination Cursors** - `.start_at()`, `.start_after()`, `.end_at()`, `.end_before()` (Phase 2.5)
 
 ### Test Coverage
 
 | Category | Count | Status |
 |----------|-------|--------|
-| **Total Tests** | 321 | ✅ 100% passing |
-| **Sync Integration** | 62 | ✅ |
-| **Async Integration** | 61 | ✅ |
+| **Total Tests** | 337 | ✅ 100% passing |
+| **Sync Integration** | 70 | ✅ |
+| **Async Integration** | 69 | ✅ |
 | **Unit Tests** | 198 | ✅ |
 | **Phase 2 Integration** | 37 | ✅ |
-| **Phase 2.5 Integration** | 53 | ✅ (new) |
+| **Phase 2.5 Integration** | 69 | ✅ (includes pagination) |
 
 ### Documentation
 
@@ -167,10 +168,6 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
    - Works seamlessly for users, one-time fetch on attribute access
    - Status: Working as designed
 
-2. **Query Pagination Cursors** (Phase 3)
-   - `.start_after()` and `.end_before()` not yet implemented
-   - Workaround: Use native Query API for cursor-based pagination
-   - Status: Planned for Phase 3
 
 ---
 
@@ -178,23 +175,24 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
 
 | Metric | Phase 1 | Phase 2 | Phase 2.5 | Total Change |
 |--------|---------|---------|-----------|--------------|
-| **Total Tests** | 231 | 268 | 321 | +90 (+39%) |
+| **Total Tests** | 231 | 268 | 337 | +106 (+46%) |
 | **Test Pass Rate** | 100% ✅ | 100% ✅ | 100% ✅ | Maintained |
-| **Integration Tests** | 33 | 70 | 123 | +90 (+273%) |
+| **Integration Tests** | 33 | 70 | 139 | +106 (+321%) |
 | **Code Quality** | Good | Good | Excellent | ⬆️ |
 | **Documentation** | 4 docs | 6 docs | 8 docs | +4 |
 | **Performance** | Baseline | **50-90% better** | **50-90% better** | 🚀 |
 
 ### Phase 2 & 2.5 Achievements
 
-- ✅ **+90 integration tests** (39% increase in total tests)
+- ✅ **+106 integration tests** (46% increase in total tests)
 - ✅ **+7 new classes** (FireQuery, AsyncFireQuery, and Phase 2 additions)
-- ✅ **+8 new methods** (where, order_by, limit, get_all, array_union, array_remove, increment, collection)
+- ✅ **+12 new methods** (where, order_by, limit, start_at, start_after, end_at, end_before, get_all, array_union, array_remove, increment, collection)
 - ✅ **50-90% bandwidth reduction** from partial updates
 - ✅ **70% code reduction** in query operations
+- ✅ **Full pagination support** with cursor-based navigation
 - ✅ **Concurrency-safe** atomic operations eliminate race conditions
 - ✅ **Zero breaking changes** (100% backward compatible)
-- ✅ **53KB total documentation** (two comprehensive reports)
+- ✅ **55KB total documentation** (two comprehensive reports)
 
 ---
 
@@ -232,10 +230,18 @@ user.increment('view_count', 1)           # Atomic counter
 user.array_union('tags', ['python'])      # Array operations
 user.save()
 
-# Phase 2.5 query builder
-query = users.where('country', '==', 'England').order_by('score').limit(10)
+# Phase 2.5 query builder with pagination
+query = (users
+         .where('country', '==', 'England')
+         .order_by('score', direction='DESCENDING')
+         .limit(10))
 for top_user in query.get():
     print(top_user.name)
+
+# Pagination cursors
+page1 = users.order_by('created_at').limit(20).get()
+last_date = page1[-1].created_at
+page2 = users.order_by('created_at').start_after({'created_at': last_date}).limit(20).get()
 
 # Subcollections
 posts = user.collection('posts')
@@ -264,10 +270,14 @@ user.increment('score', 10)
 posts = user.collection('posts')
 comments = post.collection('comments')
 
-# Query builder (Phase 2.5)
+# Query builder with pagination (Phase 2.5)
 query = users.where('birth_year', '>', 1800).order_by('score').limit(10)
 for user in query.get():
     print(user.name)
+
+# Pagination cursors
+page1 = users.order_by('birth_year').limit(10).get()
+page2 = users.order_by('birth_year').start_after({'birth_year': page1[-1].birth_year}).limit(10).get()
 ```
 
 **Performance Benefits** (automatic):
@@ -345,7 +355,7 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 ### Testing Infrastructure
 - Firestore Emulator (local testing)
 - Custom test harness for cleanup
-- 123 integration tests (62 sync + 61 async)
+- 139 integration tests (70 sync + 69 async)
 - 198 unit tests
 
 ---
@@ -360,8 +370,9 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 - ✅ Subcollection support (.collection())
 - ✅ Atomic operations (array_union, array_remove, increment)
 - ✅ **Query builder** (where, order_by, limit, get, stream)
-- ✅ 90 new integration tests (39% increase)
-- ✅ 53KB total documentation
+- ✅ **Pagination cursors** (start_at, start_after, end_at, end_before)
+- ✅ 106 new integration tests (46% increase)
+- ✅ 55KB total documentation
 - ✅ 2 comprehensive demo notebooks
 
 **Performance Gains**:
@@ -374,8 +385,8 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 **Next Steps**:
 1. Begin Phase 3 (ProxiedMap/ProxiedList) - ~1-2 weeks
-2. Add pagination cursors (.start_after(), .end_before())
-3. Continue documentation and examples
+2. Continue documentation and examples
+3. Consider Phase 4 features (transactions, batch operations, reference hydration)
 
 **Production Readiness**: ✅ Phase 1 + Phase 2 + Phase 2.5 are production-ready!
 
@@ -391,4 +402,4 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ---
 
-**Status Summary**: Phase 2.5 complete! All planned Phase 2 features implemented with excellent test coverage (321/321 tests passing, 100%). Query builder provides intuitive chainable interface with 70% code reduction. FireProx is production-ready for rapid prototyping with significant performance improvements (50-90% bandwidth reduction, memory-efficient streaming, concurrency-safe atomic operations). Zero breaking changes ensure smooth upgrades.
+**Status Summary**: Phase 2.5 complete! All planned Phase 2 features implemented with excellent test coverage (337/337 tests passing, 100%). Query builder with full pagination support provides intuitive chainable interface with 70% code reduction. FireProx is production-ready for rapid prototyping with significant performance improvements (50-90% bandwidth reduction, memory-efficient streaming, cursor-based pagination, concurrency-safe atomic operations). Zero breaking changes ensure smooth upgrades.

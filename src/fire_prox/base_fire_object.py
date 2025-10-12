@@ -7,6 +7,7 @@ identical between synchronous and asynchronous FireObject implementations.
 
 from typing import Optional, Any, Dict, Set
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
+from google.cloud.firestore_v1.vector import Vector
 from .state import State
 
 
@@ -297,6 +298,11 @@ class BaseFireObject:
         if not hasattr(self, '_data'):
             object.__setattr__(self, name, value)
         else:
+            # Convert FireVector to native Vector before storing
+            from .fire_vector import FireVector
+            if isinstance(value, FireVector):
+                value = value.to_firestore_vector()
+
             # Store in _data and track in dirty fields
             self._data[name] = value
             self._dirty_fields.add(name)
@@ -440,9 +446,21 @@ class BaseFireObject:
         if not snapshot.exists:
             raise ValueError("Cannot create FireObject from non-existent snapshot")
 
+        # Get data from snapshot
+        data = snapshot.to_dict() or {}
+
+        # Convert any native Vector objects to FireVector
+        from .fire_vector import FireVector
+        converted_data = {}
+        for key, value in data.items():
+            if isinstance(value, Vector):
+                converted_data[key] = FireVector.from_firestore_vector(value)
+            else:
+                converted_data[key] = value
+
         return {
             'doc_ref': snapshot.reference,
             'initial_state': State.LOADED,
             'parent_collection': parent_collection,
-            'data': snapshot.to_dict() or {}
+            'data': converted_data
         }

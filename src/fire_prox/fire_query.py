@@ -169,6 +169,127 @@ class FireQuery:
         new_query = self._query.limit(count)
         return FireQuery(new_query, self._parent_collection)
 
+    def start_at(self, *document_fields_or_snapshot) -> 'FireQuery':
+        """
+        Start query results at a cursor position (inclusive).
+
+        Creates a new FireQuery that starts at the specified cursor. The cursor
+        can be a document snapshot or a dictionary of field values matching the
+        order_by fields.
+
+        Args:
+            *document_fields_or_snapshot: Either:
+                - A dictionary of field values: {'field': value}
+                - A DocumentSnapshot from a previous query
+                - Direct field values matching order_by clause order
+
+        Returns:
+            A new FireQuery instance with the start cursor applied.
+
+        Example:
+            # Using field values (requires matching order_by)
+            query = users.order_by('age').start_at({'age': 25})
+
+            # Pagination: get first page, then start at last document
+            page1 = users.order_by('age').limit(10).get()
+            last_age = page1[-1].age
+            page2 = users.order_by('age').start_at({'age': last_age}).limit(10).get()
+
+            # Using a document snapshot
+            last_doc_ref = page1[-1]._doc_ref
+            last_snapshot = last_doc_ref.get()
+            page2 = users.order_by('age').start_at(last_snapshot).limit(10).get()
+        """
+        new_query = self._query.start_at(*document_fields_or_snapshot)
+        return FireQuery(new_query, self._parent_collection)
+
+    def start_after(self, *document_fields_or_snapshot) -> 'FireQuery':
+        """
+        Start query results after a cursor position (exclusive).
+
+        Creates a new FireQuery that starts after the specified cursor. The cursor
+        document itself is excluded from results. This is typically used for
+        pagination to avoid duplicating the last document from the previous page.
+
+        Args:
+            *document_fields_or_snapshot: Either:
+                - A dictionary of field values: {'field': value}
+                - A DocumentSnapshot from a previous query
+                - Direct field values matching order_by clause order
+
+        Returns:
+            A new FireQuery instance with the start-after cursor applied.
+
+        Example:
+            # Pagination: exclude the last document from previous page
+            page1 = users.order_by('age').limit(10).get()
+            last_age = page1[-1].age
+            page2 = users.order_by('age').start_after({'age': last_age}).limit(10).get()
+
+            # Using a document snapshot (common pattern)
+            last_doc_ref = page1[-1]._doc_ref
+            last_snapshot = last_doc_ref.get()
+            page2 = users.order_by('age').start_after(last_snapshot).limit(10).get()
+        """
+        new_query = self._query.start_after(*document_fields_or_snapshot)
+        return FireQuery(new_query, self._parent_collection)
+
+    def end_at(self, *document_fields_or_snapshot) -> 'FireQuery':
+        """
+        End query results at a cursor position (inclusive).
+
+        Creates a new FireQuery that ends at the specified cursor. The cursor
+        document is included in the results.
+
+        Args:
+            *document_fields_or_snapshot: Either:
+                - A dictionary of field values: {'field': value}
+                - A DocumentSnapshot
+                - Direct field values matching order_by clause order
+
+        Returns:
+            A new FireQuery instance with the end cursor applied.
+
+        Example:
+            # Get all users up to and including age 50
+            query = users.order_by('age').end_at({'age': 50})
+
+            # Using a specific document as endpoint
+            target_doc_ref = users.doc('user123')._doc_ref
+            target_snapshot = target_doc_ref.get()
+            query = users.order_by('age').end_at(target_snapshot)
+        """
+        new_query = self._query.end_at(*document_fields_or_snapshot)
+        return FireQuery(new_query, self._parent_collection)
+
+    def end_before(self, *document_fields_or_snapshot) -> 'FireQuery':
+        """
+        End query results before a cursor position (exclusive).
+
+        Creates a new FireQuery that ends before the specified cursor. The cursor
+        document itself is excluded from results.
+
+        Args:
+            *document_fields_or_snapshot: Either:
+                - A dictionary of field values: {'field': value}
+                - A DocumentSnapshot
+                - Direct field values matching order_by clause order
+
+        Returns:
+            A new FireQuery instance with the end-before cursor applied.
+
+        Example:
+            # Get all users before age 50 (exclude 50)
+            query = users.order_by('age').end_before({'age': 50})
+
+            # Using a specific document as exclusive endpoint
+            target_doc_ref = users.doc('user123')._doc_ref
+            target_snapshot = target_doc_ref.get()
+            query = users.order_by('age').end_before(target_snapshot)
+        """
+        new_query = self._query.end_before(*document_fields_or_snapshot)
+        return FireQuery(new_query, self._parent_collection)
+
     # =========================================================================
     # Query Execution Methods
     # =========================================================================

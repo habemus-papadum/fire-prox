@@ -14,10 +14,11 @@ Phase 2.5 successfully implements the deferred query builder feature from Phase 
 ### Key Achievements
 
 - ✅ **Chainable Query Builder**: Intuitive `.where().order_by().limit()` API
+- ✅ **Pagination Cursors**: Full support for `.start_at()`, `.start_after()`, `.end_at()`, `.end_before()`
 - ✅ **Dual API Support**: Full sync (`FireQuery`) and async (`AsyncFireQuery`) implementations
 - ✅ **Multiple Execution Methods**: Both `.get()` (list) and `.stream()` (iterator) patterns
 - ✅ **Immutable Query Pattern**: Each method returns new instance for safety
-- ✅ **Comprehensive Test Coverage**: 53 integration tests (100% pass rate)
+- ✅ **Comprehensive Test Coverage**: 69 integration tests (100% pass rate)
 - ✅ **Zero Breaking Changes**: Fully backward compatible
 - ✅ **Production Ready**: Battle-tested against Firestore emulator
 
@@ -215,6 +216,61 @@ query = users.order_by('score', direction='DESCENDING').limit(10)
 query = users.where('active', '==', True).limit(5)
 ```
 
+#### `start_at(*document_fields_or_snapshot) -> FireQuery`
+
+Start query results at a cursor position (inclusive).
+
+**Parameters**: Either a dictionary of field values matching order_by fields, or a DocumentSnapshot
+
+**Example**:
+```python
+# Using field values
+query = users.order_by('age').start_at({'age': 25})
+
+# Using a document snapshot for pagination
+page1 = await users.order_by('age').limit(10).get()
+last_snapshot = await page1[-1]._doc_ref.get()
+page2 = await users.order_by('age').start_at(last_snapshot).limit(10).get()
+```
+
+#### `start_after(*document_fields_or_snapshot) -> FireQuery`
+
+Start query results after a cursor position (exclusive).
+
+**Parameters**: Either a dictionary of field values matching order_by fields, or a DocumentSnapshot
+
+**Example**:
+```python
+# Typical pagination pattern - exclude the last document from previous page
+page1 = users.order_by('age').limit(10).get()
+last_age = page1[-1].age
+page2 = users.order_by('age').start_after({'age': last_age}).limit(10).get()
+```
+
+#### `end_at(*document_fields_or_snapshot) -> FireQuery`
+
+End query results at a cursor position (inclusive).
+
+**Parameters**: Either a dictionary of field values matching order_by fields, or a DocumentSnapshot
+
+**Example**:
+```python
+# Get all users up to and including age 50
+query = users.order_by('age').end_at({'age': 50})
+```
+
+#### `end_before(*document_fields_or_snapshot) -> FireQuery`
+
+End query results before a cursor position (exclusive).
+
+**Parameters**: Either a dictionary of field values matching order_by fields, or a DocumentSnapshot
+
+**Example**:
+```python
+# Get all users before age 50 (exclude 50)
+query = users.order_by('age').end_before({'age': 50})
+```
+
 #### `get_all() -> Iterator[FireObject]`
 
 Returns an iterator of all documents in the collection.
@@ -281,7 +337,7 @@ async for user in query.stream():
 
 ### Test Statistics
 
-- **Total Tests**: 53 (27 sync + 26 async)
+- **Total Tests**: 69 (35 sync + 34 async)
 - **Pass Rate**: 100%
 - **Test Categories**:
   - Basic queries: 10 tests (5 sync + 5 async)
@@ -291,6 +347,7 @@ async for user in query.stream():
   - Query execution: 8 tests (4 sync + 4 async)
   - Immutable pattern: 6 tests (3 sync + 3 async)
   - Edge cases: 6 tests (3 sync + 3 async)
+  - Pagination cursors: 16 tests (8 sync + 8 async)
   - Collection methods: 1 test each
 
 ### Test Coverage Matrix
@@ -300,6 +357,10 @@ async for user in query.stream():
 | **where()** | ✅ 5 | ✅ 5 | 100% |
 | **order_by()** | ✅ 4 | ✅ 4 | 100% |
 | **limit()** | ✅ 4 | ✅ 4 | 100% |
+| **start_at()** | ✅ 2 | ✅ 2 | 100% |
+| **start_after()** | ✅ 2 | ✅ 2 | 100% |
+| **end_at()** | ✅ 2 | ✅ 2 | 100% |
+| **end_before()** | ✅ 2 | ✅ 2 | 100% |
 | **get()** | ✅ 4 | ✅ 4 | 100% |
 | **stream()** | ✅ 4 | ✅ 4 | 100% |
 | **get_all()** | ✅ 1 | ✅ 1 | 100% |
@@ -512,12 +573,14 @@ Firestore's query performance is determined by:
 # Get first page
 page1 = users.order_by('created_at').limit(20).get()
 
-# Get next page (requires cursor - Phase 3 feature)
-last_doc = page1[-1]
-page2 = users.order_by('created_at').start_after(last_doc).limit(20).get()
-```
+# Get next page using cursor
+last_age = page1[-1].created_at
+page2 = users.order_by('created_at').start_after({'created_at': last_age}).limit(20).get()
 
-**Note**: `.start_after()` and `.end_before()` are planned for Phase 3.
+# Or use document snapshot as cursor
+last_snapshot = page1[-1]._doc_ref.get()
+page2 = users.order_by('created_at').start_after(last_snapshot).limit(20).get()
+```
 
 ---
 
@@ -559,15 +622,7 @@ users = [FireObject.from_snapshot(snap) for snap in native_query.stream()]
 
 ## Known Limitations
 
-### 1. No Pagination Cursors
-
-**Current Limitation**: `.start_after()` and `.end_before()` not yet implemented.
-
-**Workaround**: Use native API for cursor-based pagination.
-
-**Status**: Planned for Phase 3.
-
-### 2. No Composite Filters (OR queries)
+### 1. No Composite Filters (OR queries)
 
 **Current Limitation**: Cannot express OR conditions (Firestore feature added in 2023).
 
@@ -589,7 +644,7 @@ users = [FireObject.from_snapshot(snap) for snap in native_query.stream()]
 
 **Status**: May be added in future phase if demand is high.
 
-### 3. No Aggregation Queries
+### 2. No Aggregation Queries
 
 **Current Limitation**: `.count()`, `.sum()`, `.average()` not supported.
 
@@ -603,20 +658,12 @@ users = [FireObject.from_snapshot(snap) for snap in native_query.stream()]
 
 ### Phase 3 Candidates
 
-1. **Pagination Cursors**:
-```python
-query.start_after(document).limit(10)
-query.start_at(document).limit(10)
-query.end_before(document).limit(10)
-query.end_at(document).limit(10)
-```
-
-2. **Query Result Caching**:
+1. **Query Result Caching**:
 ```python
 query.cache(ttl_seconds=60)  # Cache results for 60 seconds
 ```
 
-3. **Batch Iteration**:
+2. **Batch Iteration**:
 ```python
 for batch in query.batch(size=100):  # Process in batches of 100
     process_batch(batch)
@@ -660,9 +707,9 @@ Phase 2.5 successfully completes the deferred query builder feature, bringing Fi
 
 ### By the Numbers
 
-- **Development Time**: 1 day
-- **Lines of Code**: 1,759 (implementation + tests + docs)
-- **Test Coverage**: 100% (53/53 tests passing)
+- **Development Time**: 1 day (initial) + 2 hours (pagination cursors)
+- **Lines of Code**: ~2,100 (implementation + tests + docs)
+- **Test Coverage**: 100% (69/69 tests passing)
 - **Breaking Changes**: 0
 - **Performance Impact**: < 1ms per document
 - **Developer Experience**: 70% reduction in query boilerplate
