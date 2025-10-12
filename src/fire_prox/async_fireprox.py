@@ -196,30 +196,4 @@ class AsyncFireProx(BaseFireProx):
             sync_client=self._sync_client
         )
 
-    # =========================================================================
-    # Batch Operations (Phase 2+)
-    # =========================================================================
-
-    def batch(self) -> 'AsyncFireBatch':
-        """
-        Create a batch for atomic write operations.
-
-        Phase 2+ feature.
-
-        Returns:
-            An AsyncFireBatch instance for batching operations.
-
-        Example:
-            batch = db.batch()
-            user1 = db.doc('users/user1')
-            user1.status = 'active'
-            batch.set(user1)
-
-            user2 = db.doc('users/user2')
-            batch.delete(user2)
-
-            await batch.commit()
-        """
-        raise NotImplementedError("Phase 2+ feature - batch operations")
-
-    # Note: transaction() method is inherited from BaseFireProx
+    # Note: batch() and transaction() methods are inherited from BaseFireProx

@@ -203,31 +203,4 @@ class FireProx(BaseFireProx):
             client=self
         )
 
-    # =========================================================================
-    # Batch Operations (Phase 2+)
-    # =========================================================================
-
-    def batch(self) -> 'FireBatch':
-        """
-        Create a batch for atomic write operations.
-
-        Phase 2+ feature. Provides a Pythonic wrapper around the native
-        WriteBatch for performing multiple write operations atomically.
-
-        Returns:
-            A FireBatch instance for batching operations.
-
-        Example:
-            batch = db.batch()
-            user1 = db.doc('users/user1')
-            user1.status = 'active'
-            batch.set(user1)
-
-            user2 = db.doc('users/user2')
-            batch.delete(user2)
-
-            batch.commit()
-        """
-        raise NotImplementedError("Phase 2+ feature - batch operations")
-
-    # Note: transaction() method is inherited from BaseFireProx
+    # Note: batch() and transaction() methods are inherited from BaseFireProx

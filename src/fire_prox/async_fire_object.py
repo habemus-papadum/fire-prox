@@ -334,9 +334,13 @@ class AsyncFireObject(BaseFireObject):
 
         return self
 
-    async def delete(self) -> None:
+    async def delete(self, batch: Optional[Any] = None) -> None:
         """
         Delete the document from Firestore asynchronously.
+
+        Args:
+            batch: Optional batch object for batched deletes. If provided,
+                  the delete will be accumulated in the batch (committed later).
 
         Raises:
             ValueError: If called on DETACHED object.
@@ -349,12 +353,21 @@ class AsyncFireObject(BaseFireObject):
         Example:
             user = db.doc('users/alovelace')
             await user.delete()
+
+            # Batch delete
+            batch = db.batch()
+            user1.delete(batch=batch)
+            user2.delete(batch=batch)
+            await batch.commit()  # Commit all operations
         """
         self._validate_not_detached("delete()")
         self._validate_not_deleted("delete()")
 
-        # Async delete
-        await self._doc_ref.delete()
+        # Async delete with or without batch
+        if batch is not None:
+            batch.delete(self._doc_ref)
+        else:
+            await self._doc_ref.delete()
 
         # Transition to DELETED
         self._transition_to_deleted()

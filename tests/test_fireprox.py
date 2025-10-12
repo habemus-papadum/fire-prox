@@ -285,12 +285,15 @@ class TestFireProxBatchAndTransactions:
         assert hasattr(db, 'transaction')
         assert callable(db.transaction)
 
-    def test_batch_raises_notimplementederror(self):
-        """Test that batch() raises NotImplementedError (Phase 2+)."""
+    def test_batch_returns_batch_object(self):
+        """Test that batch() returns a WriteBatch object."""
         mock_client = Mock(spec=FirestoreClient)
+        mock_batch = Mock()
+        mock_client.batch.return_value = mock_batch
         db = FireProx(mock_client)
-        with pytest.raises(NotImplementedError):
-            db.batch()
+        batch = db.batch()
+        assert batch == mock_batch
+        mock_client.batch.assert_called_once()
 
     def test_transaction_returns_transaction_object(self):
         """Test that transaction() returns a transaction object."""
