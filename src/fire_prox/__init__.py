@@ -78,26 +78,30 @@ Example Usage (Asynchronous):
 from .fireprox import FireProx
 from .fire_object import FireObject
 from .fire_collection import FireCollection
+from .fire_query import FireQuery
 
 # Asynchronous API
 from .async_fireprox import AsyncFireProx
 from .async_fire_object import AsyncFireObject
 from .async_fire_collection import AsyncFireCollection
+from .async_fire_query import AsyncFireQuery
 
 # Shared
 from .state import State
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # Sync API
     "FireProx",
     "FireObject",
     "FireCollection",
+    "FireQuery",
     # Async API
     "AsyncFireProx",
     "AsyncFireObject",
     "AsyncFireCollection",
+    "AsyncFireQuery",
     # Shared
     "State",
 ]

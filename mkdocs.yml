@@ -15,6 +15,7 @@ nav:
     - Phase 1 Demo Sync: demos/phase1/sync.ipynb
     - Phase 1 Demo Async: demos/phase1/async.ipynb
     - Phase 2 Demo (Sync & Async): demos/phase2/demo.ipynb
+    - Phase 2.5 Demo Query Builder: demos/phase2_5/demo.ipynb
   - Architecture: Architectural_Blueprint.md
   - Implementation Log: Implementation_Log.md
   - API: reference.md

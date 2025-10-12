@@ -126,7 +126,7 @@ class AsyncFireCollection(BaseFireCollection):
         """
         Create a query with a filter condition.
 
-        Phase 2 feature. Builds a lightweight query for common filtering needs.
+        Phase 2.5 feature. Builds a lightweight query for common filtering needs.
 
         Args:
             field: The field path to filter on.
@@ -140,10 +140,16 @@ class AsyncFireCollection(BaseFireCollection):
             query = users.where('birth_year', '>', 1800)
                         .where('country', '==', 'UK')
                         .limit(10)
-            async for user in query.get():
+            async for user in query.stream():
                 print(user.name)
         """
-        raise NotImplementedError("Phase 2 feature - querying")
+        from .async_fire_query import AsyncFireQuery
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        # Create initial query with filter
+        filter_obj = FieldFilter(field, op, value)
+        native_query = self._collection_ref.where(filter=filter_obj)
+        return AsyncFireQuery(native_query, parent_collection=self)
 
     def order_by(
         self,
@@ -153,7 +159,7 @@ class AsyncFireCollection(BaseFireCollection):
         """
         Create a query with ordering.
 
-        Phase 2 feature.
+        Phase 2.5 feature.
 
         Args:
             field: The field path to order by.
@@ -162,13 +168,26 @@ class AsyncFireCollection(BaseFireCollection):
         Returns:
             An AsyncFireQuery instance for method chaining.
         """
-        raise NotImplementedError("Phase 2 feature - querying")
+        from .async_fire_query import AsyncFireQuery
+        from google.cloud.firestore_v1 import Query as QueryClass
+
+        # Convert direction string to constant
+        if direction.upper() == 'ASCENDING':
+            direction_const = QueryClass.ASCENDING
+        elif direction.upper() == 'DESCENDING':
+            direction_const = QueryClass.DESCENDING
+        else:
+            raise ValueError(f"Invalid direction: {direction}. Must be 'ASCENDING' or 'DESCENDING'")
+
+        # Create query with ordering
+        native_query = self._collection_ref.order_by(field, direction=direction_const)
+        return AsyncFireQuery(native_query, parent_collection=self)
 
     def limit(self, count: int) -> 'AsyncFireQuery':
         """
         Create a query with a result limit.
 
-        Phase 2 feature.
+        Phase 2.5 feature.
 
         Args:
             count: Maximum number of results to return.
@@ -176,13 +195,20 @@ class AsyncFireCollection(BaseFireCollection):
         Returns:
             An AsyncFireQuery instance for method chaining.
         """
-        raise NotImplementedError("Phase 2 feature - querying")
+        from .async_fire_query import AsyncFireQuery
+
+        if count <= 0:
+            raise ValueError(f"Limit count must be positive, got {count}")
+
+        # Create query with limit
+        native_query = self._collection_ref.limit(count)
+        return AsyncFireQuery(native_query, parent_collection=self)
 
     async def get_all(self) -> AsyncIterator[AsyncFireObject]:
         """
         Retrieve all documents in the collection.
 
-        Phase 2 feature. Returns an async iterator of all documents.
+        Phase 2.5 feature. Returns an async iterator of all documents.
 
         Yields:
             AsyncFireObject instances in LOADED state for each document.
@@ -191,6 +217,6 @@ class AsyncFireCollection(BaseFireCollection):
             async for user in users.get_all():
                 print(f"{user.name}: {user.year}")
         """
-        raise NotImplementedError("Phase 2 feature - querying")
-        # Unreachable, but for type checking:
-        yield  # type: ignore
+        # Stream all documents from the collection
+        async for snapshot in self._collection_ref.stream():
+            yield AsyncFireObject.from_snapshot(snapshot, parent_collection=self)
