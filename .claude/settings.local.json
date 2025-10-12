@@ -7,7 +7,8 @@
       "Bash(./test.sh:*)",
       "Bash(chmod:*)",
       "Bash(./nb.sh)",
-      "Bash(./nb.sh:*)"
+      "Bash(./nb.sh:*)",
+      "Bash(./test_notebooks.sh:*)"
     ],
     "deny": [],
     "ask": []

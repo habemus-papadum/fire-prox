@@ -37,8 +37,12 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          
       - name: Create Virtual Environment
         run: uv sync --frozen
 
       - name: Run Unit Tests
         run: ./test.sh
+
+      - name: Run Notebook Tests
+        run: ./test_notebooks.sh
