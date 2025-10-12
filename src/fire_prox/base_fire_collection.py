@@ -72,6 +72,38 @@ class BaseFireCollection:
         """
         return self._client.transaction()
 
+    def batch(self) -> Any:
+        """
+        Create a batch for accumulating multiple write operations.
+
+        Convenience method for creating batches directly from a collection
+        reference, eliminating the need to access the root FireProx client.
+
+        Returns:
+            A native google.cloud.firestore.WriteBatch or
+            google.cloud.firestore.AsyncWriteBatch instance.
+
+        Example:
+            users = db.collection('users')
+            batch = users.batch()
+
+            # Accumulate operations
+            user1 = users.doc('alice')
+            user1.name = 'Alice'
+            user1.save(batch=batch)
+
+            user2 = users.doc('bob')
+            user2.name = 'Bob'
+            user2.save(batch=batch)
+
+            # Commit all operations atomically
+            batch.commit()
+
+        Note:
+            See BaseFireProx.batch() for detailed documentation on batch operations.
+        """
+        return self._client.batch()
+
     # =========================================================================
     # Properties (SHARED)
     # =========================================================================
@@ -118,3 +150,71 @@ class BaseFireCollection:
             String showing the collection path.
         """
         return f"{type(self).__name__}({self.path})"
+
+    # =========================================================================
+    # Real-Time Listeners (Sync-only)
+    # =========================================================================
+
+    def on_snapshot(self, callback: Any) -> Any:
+        """
+        Listen for real-time updates to this collection.
+
+        This method sets up a real-time listener that fires the callback
+        whenever any document in the collection changes. The listener runs
+        on a separate thread managed by the Firestore SDK.
+
+        **Important**: This is a sync-only feature. Even for AsyncFireCollection
+        instances, the listener uses the synchronous client (via _sync_client)
+        to run on a background thread. This is the standard Firestore pattern
+        for real-time listeners in Python.
+
+        Args:
+            callback: Callback function invoked on collection changes.
+                     Signature: callback(col_snapshot, changes, read_time)
+                     - col_snapshot: List of DocumentSnapshot objects
+                     - changes: List of DocumentChange objects (ADDED, MODIFIED, REMOVED)
+                     - read_time: Timestamp of the snapshot
+
+        Returns:
+            Watch object with an `.unsubscribe()` method to stop listening.
+
+        Example:
+            import threading
+
+            callback_done = threading.Event()
+
+            def on_change(col_snapshot, changes, read_time):
+                for change in changes:
+                    if change.type.name == 'ADDED':
+                        print(f"New document: {change.document.id}")
+                    elif change.type.name == 'MODIFIED':
+                        print(f"Modified document: {change.document.id}")
+                    elif change.type.name == 'REMOVED':
+                        print(f"Removed document: {change.document.id}")
+                callback_done.set()
+
+            # Start listening to a collection
+            users = db.collection('users')
+            watch = users.on_snapshot(on_change)
+
+            # Wait for initial snapshot
+            callback_done.wait()
+
+            # Later: stop listening
+            watch.unsubscribe()
+
+        Note:
+            The callback runs on a separate thread. Use threading primitives
+            (Event, Lock, Queue) for synchronization with your main thread.
+        """
+        # For sync FireCollection, use _collection_ref directly
+        # For async FireCollection, use _sync_client to create sync ref
+        if hasattr(self, '_sync_client') and self._sync_client is not None:
+            # AsyncFireCollection: create sync collection ref
+            collection_ref = self._sync_client.collection(self.path)
+        else:
+            # FireCollection: use regular collection ref
+            collection_ref = self._collection_ref
+
+        # Set up the listener
+        return collection_ref.on_snapshot(callback)

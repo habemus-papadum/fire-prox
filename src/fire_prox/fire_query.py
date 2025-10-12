@@ -496,6 +496,64 @@ class FireQuery:
             for snapshot in self._query.stream():
                 yield FireObject.from_snapshot(snapshot, self._parent_collection)
 
+    # =========================================================================
+    # Real-Time Listeners (Sync-only)
+    # =========================================================================
+
+    def on_snapshot(self, callback: Any) -> Any:
+        """
+        Listen for real-time updates to this query.
+
+        This method sets up a real-time listener that fires the callback
+        whenever any document matching the query changes. The listener runs
+        on a separate thread managed by the Firestore SDK.
+
+        **Important**: This is a sync-only feature. The listener uses the
+        underlying synchronous query to run on a background thread. This is
+        the standard Firestore pattern for real-time listeners in Python.
+
+        Args:
+            callback: Callback function invoked on query changes.
+                     Signature: callback(query_snapshot, changes, read_time)
+                     - query_snapshot: List of DocumentSnapshot objects matching the query
+                     - changes: List of DocumentChange objects (ADDED, MODIFIED, REMOVED)
+                     - read_time: Timestamp of the snapshot
+
+        Returns:
+            Watch object with an `.unsubscribe()` method to stop listening.
+
+        Example:
+            import threading
+
+            callback_done = threading.Event()
+
+            def on_change(query_snapshot, changes, read_time):
+                for change in changes:
+                    if change.type.name == 'ADDED':
+                        print(f"New: {change.document.id}")
+                    elif change.type.name == 'MODIFIED':
+                        print(f"Modified: {change.document.id}")
+                    elif change.type.name == 'REMOVED':
+                        print(f"Removed: {change.document.id}")
+                callback_done.set()
+
+            # Listen to active users only
+            active_users = users.where('status', '==', 'active')
+            watch = active_users.on_snapshot(on_change)
+
+            # Wait for initial snapshot
+            callback_done.wait()
+
+            # Later: stop listening
+            watch.unsubscribe()
+
+        Note:
+            The callback runs on a separate thread. Use threading primitives
+            (Event, Lock, Queue) for synchronization with your main thread.
+        """
+        # Use the native query's on_snapshot method directly
+        return self._query.on_snapshot(callback)
+
     def __repr__(self) -> str:
         """Return string representation of the query."""
         return f"<FireQuery query={self._query}>"

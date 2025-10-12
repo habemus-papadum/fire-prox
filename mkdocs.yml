@@ -24,10 +24,17 @@ nav:
       - Vector Embeddings: demos/topics/vector_embeddings.ipynb
       - Transactions: demos/topics/transactions.ipynb
       - Projections: demos/topics/projections.ipynb
+      - On Snapshot Listeners: demos/topics/on_snapshot.ipynb
   - Architecture: Architectural_Blueprint.md
   - Implementation Log: Implementation_Log.md
   - API: reference.md
   - Roadmap: STATUS.md
+  - Claude Code Sessions: 
+    - 2025-10-12 20:01 (31m): sessionslogs/2025-10-12_20-01-30_eff21584.md
+    - 2025-10-12 17:48 (2h 9m): sessionslogs/2025-10-12_17-48-27_9284470f.md
+    - 2025-10-11 20:31 (21h 13m): sessionslogs/2025-10-11_20-31-41_bd3b5c04.md
+    - Architectural Session: DesignDoc.md
+    # Add logs here as they are created
 
 
 # If you'd like to specify a separate docs directory, you can do so here

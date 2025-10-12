@@ -208,13 +208,15 @@ class AsyncFireObject(BaseFireObject):
 
         return self
 
-    async def save(self, doc_id: Optional[str] = None, transaction: Optional[Any] = None) -> 'AsyncFireObject':
+    async def save(self, doc_id: Optional[str] = None, transaction: Optional[Any] = None, batch: Optional[Any] = None) -> 'AsyncFireObject':
         """
         Save the object's data to Firestore asynchronously.
 
         Args:
             doc_id: Optional custom document ID for DETACHED objects.
             transaction: Optional transaction object for transactional writes.
+            batch: Optional batch object for batched writes. If provided,
+                  the write will be accumulated in the batch (committed later).
 
         Returns:
             Self, to allow method chaining.
@@ -222,7 +224,7 @@ class AsyncFireObject(BaseFireObject):
         Raises:
             RuntimeError: If called on DELETED object.
             ValueError: If DETACHED without parent_collection, or if
-                       trying to create a new document within a transaction.
+                       trying to create a new document within a transaction or batch.
 
         State Transitions:
             DETACHED -> LOADED (creates new document)
@@ -242,6 +244,12 @@ class AsyncFireObject(BaseFireObject):
                 user.credits += 10
                 await user.save(transaction=transaction)
             await update_user(transaction)
+
+            # Batch save
+            batch = db.batch()
+            user1.save(batch=batch)
+            user2.save(batch=batch)
+            await batch.commit()  # Commit all operations
         """
         self._validate_not_deleted("save()")
 
@@ -251,6 +259,12 @@ class AsyncFireObject(BaseFireObject):
                 raise ValueError(
                     "Cannot create new documents (DETACHED -> LOADED) within a transaction. "
                     "Create the document first, then use transactions for updates."
+                )
+
+            if batch is not None:
+                raise ValueError(
+                    "Cannot create new documents (DETACHED -> LOADED) within a batch. "
+                    "Create the document first, then use batches for updates."
                 )
 
             if not self._parent_collection:
@@ -295,9 +309,11 @@ class AsyncFireObject(BaseFireObject):
                 for field, operation in self._atomic_ops.items():
                     update_dict[field] = operation
 
-                # Perform partial update with or without transaction
+                # Perform partial update with transaction, batch, or direct
                 if transaction is not None:
                     transaction.update(self._doc_ref, update_dict)
+                elif batch is not None:
+                    batch.update(self._doc_ref, update_dict)
                 else:
                     await self._doc_ref.update(update_dict)
             else:
@@ -306,6 +322,8 @@ class AsyncFireObject(BaseFireObject):
                 storage_data = self._prepare_data_for_storage()
                 if transaction is not None:
                     transaction.set(self._doc_ref, storage_data)
+                elif batch is not None:
+                    batch.set(self._doc_ref, storage_data)
                 else:
                     await self._doc_ref.set(storage_data)
 

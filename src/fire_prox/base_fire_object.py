@@ -173,6 +173,42 @@ class BaseFireObject:
         # Get the client from the document reference
         return self._doc_ref._client.transaction()
 
+    def batch(self) -> Any:
+        """
+        Create a batch for accumulating multiple write operations.
+
+        Convenience method for creating batches directly from a document
+        reference, eliminating the need to access the root FireProx client.
+
+        Returns:
+            A native google.cloud.firestore.WriteBatch or
+            google.cloud.firestore.AsyncWriteBatch instance.
+
+        Raises:
+            ValueError: If called on a DETACHED object (no document path yet).
+
+        Example:
+            user = db.doc('users/alice')
+            batch = user.batch()
+
+            # Use the batch for multiple operations
+            user.credits = 100
+            user.save(batch=batch)
+
+            other_user = db.doc('users/bob')
+            other_user.delete(batch=batch)
+
+            # Commit all operations atomically
+            batch.commit()
+
+        Note:
+            See BaseFireProx.batch() for detailed documentation on batch operations.
+        """
+        self._validate_not_detached("batch()")
+
+        # Get the client from the document reference
+        return self._doc_ref._client.batch()
+
     # =========================================================================
     # Subcollections (Phase 2)
     # =========================================================================
@@ -538,6 +574,77 @@ class BaseFireObject:
     def _transition_to_deleted(self) -> None:
         """Transition to DELETED state."""
         object.__setattr__(self, '_state', State.DELETED)
+
+    # =========================================================================
+    # Real-Time Listeners (Sync-only via _sync_doc_ref or _doc_ref)
+    # =========================================================================
+
+    def on_snapshot(self, callback: Any) -> Any:
+        """
+        Listen for real-time updates to this document.
+
+        This method sets up a real-time listener that fires the callback
+        whenever the document changes in Firestore. The listener runs on
+        a separate thread managed by the Firestore SDK.
+
+        **Important**: This is a sync-only feature. Even for AsyncFireObject
+        instances, the listener uses the synchronous client (via _sync_doc_ref)
+        to run on a background thread. This is the standard Firestore pattern
+        for real-time listeners in Python.
+
+        Args:
+            callback: Callback function invoked on document changes.
+                     Signature: callback(doc_snapshot, changes, read_time)
+                     - doc_snapshot: List of DocumentSnapshot objects
+                     - changes: List of DocumentChange objects
+                     - read_time: Timestamp of the snapshot
+
+        Returns:
+            Watch object with an `.unsubscribe()` method to stop listening.
+
+        Raises:
+            ValueError: If called on a DETACHED object (no document path).
+            RuntimeError: If called on a DELETED object.
+
+        Example:
+            import threading
+
+            # Create event for synchronization
+            callback_done = threading.Event()
+
+            def on_change(doc_snapshot, changes, read_time):
+                for doc in doc_snapshot:
+                    print(f"Document updated: {doc.to_dict()}")
+                callback_done.set()
+
+            # Start listening
+            user = db.doc('users/alice')
+            watch = user.on_snapshot(on_change)
+
+            # Wait for initial snapshot
+            callback_done.wait()
+
+            # Later: stop listening
+            watch.unsubscribe()
+
+        Note:
+            The callback runs on a separate thread. Use threading primitives
+            (Event, Lock, Queue) for synchronization with your main thread.
+        """
+        self._validate_not_detached("on_snapshot()")
+        self._validate_not_deleted("on_snapshot()")
+
+        # For sync FireObject, use _doc_ref directly
+        # For async FireObject, use _sync_doc_ref (always available)
+        if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref is not None:
+            # AsyncFireObject: use sync doc ref for listener
+            doc_ref = self._sync_doc_ref
+        else:
+            # FireObject: use regular doc ref
+            doc_ref = self._doc_ref
+
+        # Set up the listener
+        return doc_ref.on_snapshot(callback)
 
     def _is_async_context(self) -> bool:
         """

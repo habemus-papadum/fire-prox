@@ -1,141 +1,106 @@
 #!/usr/bin/env python3
 """
-Claude Code Session Export Tool
+Render Claude Code sessions for this repository into docs/sessionslogs.
 
-Exports the current Claude Code session to a verbose output folder.
-Automatically detects the active session based on recent modifications.
+The script locates Claude Code JSONL archives under ~/.claude/projects that
+match the current repository (identified by the nearest pyproject.toml).
+Each session is converted into a compact Markdown transcript that highlights
+the main user prompt and assistant response while folding ancillary details
+into <details> blocks. Generated logs live in docs/sessionslogs and the
+mkdocs navigation is kept sorted by session start time.
 """
 
-import os
-import sys
-import json
-import shutil
+from __future__ import annotations
+
 import argparse
-from datetime import datetime
-from pathlib import Path
-import subprocess
-import time
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
-import html
+import json
 import re
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 
-def clean_text_for_xml(text):
-    """Remove or replace characters that cause XML parsing issues."""
-    if not text:
-        return text
-    # Remove control characters except newline, tab, and carriage return
-    text = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]", "", str(text))
-    return text
+CLAUDE_PROJECTS_ROOT = Path.home() / ".claude" / "projects"
+DOCS_SUBDIR = Path("docs")
+SESSION_LOG_DIR_NAME = "sessionslogs"
+SESSION_ID_PATTERN = re.compile(r"Session ID:\s*`?([\w-]+)`?")
+TIMESTAMP_SLUG_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})")
+SUMMARY_MAX_LENGTH = 100
+# Sessions whose short IDs should be ignored when rendering.
+IGNORED_SESSION_SUFFIXES = {"251119ea", "392f9b59"}
 
 
-def get_parent_claude_pid():
-    """Get the PID of the parent Claude process if running inside Claude Code."""
-    try:
-        # Get parent PID of current process
-        ppid = os.getppid()
-        # Check if parent is a claude process
-        result = subprocess.run(["ps", "-p", str(ppid), "-o", "cmd="], capture_output=True, text=True)
-        if "claude" in result.stdout:
-            return ppid
-    except:
-        pass
-    return None
+@dataclass
+class SessionRecord:
+    """Metadata wrapper for a Claude Code session JSONL file."""
+
+    path: Path
+    session_id: str
+    start_time: Optional[str]
+    end_time: Optional[str]
+    project_dir: Optional[str]
+    messages: List[dict]
+    stats: Dict[str, int]
+
+    @property
+    def start_datetime(self) -> datetime:
+        timestamp = self.start_time or ""
+        parsed = parse_timestamp(timestamp)
+        if parsed is None:
+            # Fallback to file modification time if metadata is missing.
+            mtime = self.path.stat().st_mtime
+            return datetime.fromtimestamp(mtime, tz=timezone.utc)
+        return parsed
 
 
-def identify_current_session(sessions, project_dir):
-    """Try to identify which session belongs to the current Claude instance."""
-    # If we're running inside Claude Code, create a temporary marker
-    claude_pid = get_parent_claude_pid()
-    if not claude_pid:
+def session_short_id(session: SessionRecord) -> str:
+    """Return the canonical short identifier for a session."""
+    return session.session_id.replace("-", "")[:8]
+
+
+def parse_timestamp(value: str) -> Optional[datetime]:
+    """Parse ISO8601 timestamps from Claude exports."""
+    if not value:
         return None
-
-    print(f"📍 Current Claude Code PID: {claude_pid}")
-
-    # First, refresh session modification times
-    refreshed_sessions = []
-    for session in sessions:
-        stat = session["path"].stat()
-        refreshed_sessions.append(
-            {"path": session["path"], "mtime": stat.st_mtime, "session_id": session["session_id"]}
-        )
-
-    # Create a unique marker file
-    marker_content = f"claude_export_marker_{claude_pid}_{time.time()}"
-    marker_file = Path(project_dir) / ".claude_export_marker"
-
+    normalized = value.replace("Z", "+00:00")
     try:
-        # Write marker file
-        marker_file.write_text(marker_content)
-        time.sleep(0.2)  # Give it a moment to register
-
-        # Check which session file was modified after marker creation
-        marker_mtime = marker_file.stat().st_mtime
-
-        for session in refreshed_sessions:
-            # Re-check modification time
-            current_mtime = session["path"].stat().st_mtime
-            if current_mtime > marker_mtime:
-                print(f"✓ Session {session['session_id'][:8]}... was modified after marker creation")
-                # Clean up marker
-                marker_file.unlink(missing_ok=True)
-                return session
-
-        # Clean up marker
-        marker_file.unlink(missing_ok=True)
-    except Exception as e:
-        print(f"⚠️  Session identification failed: {e}")
-        if marker_file.exists():
-            marker_file.unlink(missing_ok=True)
-
-    return None
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
-def find_project_sessions(project_path):
-    """Find all JSONL session files for the current project."""
-    project_path = str(project_path)
-    # Convert project path to Claude's directory naming convention
-    # Claude normalizes project directories by replacing path separators AND dots
-    # in the working directory path with hyphens (see issue #4).
-    normalized_project_path = project_path.replace("\\", "/")
-    project_dir_name = normalized_project_path.replace("/", "-").replace(".", "-")
+def find_project_root(start: Path) -> Path:
+    """Walk up from start until a pyproject.toml is located."""
+    for path in [start, *start.parents]:
+        if (path / "pyproject.toml").exists():
+            return path
+    raise RuntimeError("Unable to locate project root (missing pyproject.toml).")
+
+
+def claude_project_directory(project_root: Path) -> Path:
+    """Map a repository path to Claude's normalized project directory."""
+    normalized = str(project_root).replace("\\", "/")
+    project_dir_name = normalized.replace("/", "-").replace(".", "-")
     if project_dir_name.startswith("-"):
         project_dir_name = project_dir_name[1:]
+    return CLAUDE_PROJECTS_ROOT / f"-{project_dir_name}"
 
-    claude_project_dir = Path.home() / ".claude" / "projects" / f"-{project_dir_name}"
 
-    if not claude_project_dir.exists():
+def discover_session_files(project_root: Path) -> Sequence[Path]:
+    """List session JSONL files associated with the repository."""
+    claude_dir = claude_project_directory(project_root)
+    if not claude_dir.exists():
         return []
-
-    # Get all JSONL files sorted by modification time
-    jsonl_files = []
-    for file in claude_project_dir.glob("*.jsonl"):
-        stat = file.stat()
-        jsonl_files.append({"path": file, "mtime": stat.st_mtime, "session_id": file.stem})
-
-    return sorted(jsonl_files, key=lambda x: x["mtime"], reverse=True)
+    return sorted(claude_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
 
 
-def find_active_session(sessions, max_age_seconds=300):
-    """Find the most recently active session (modified within max_age_seconds)."""
-    if not sessions:
-        return None
-
-    current_time = time.time()
-    active_sessions = []
-
-    for session in sessions:
-        age = current_time - session["mtime"]
-        if age <= max_age_seconds:
-            active_sessions.append(session)
-
-    return active_sessions
-
-
-def parse_jsonl_file(file_path):
-    """Parse a JSONL file and extract all messages and metadata."""
-    messages = []
+def parse_jsonl_file(file_path: Path) -> SessionRecord:
+    """Parse messages and metadata from a Claude session archive."""
+    messages: List[dict] = []
     metadata = {
         "session_id": None,
         "start_time": None,
@@ -145,480 +110,651 @@ def parse_jsonl_file(file_path):
         "user_messages": 0,
         "assistant_messages": 0,
         "tool_uses": 0,
-        "models_used": set(),
     }
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
+    with file_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
             try:
                 data = json.loads(line.strip())
-                messages.append(data)
-
-                # Extract metadata
-                if metadata["session_id"] is None and "sessionId" in data:
-                    metadata["session_id"] = data["sessionId"]
-
-                if "cwd" in data and metadata["project_dir"] is None:
-                    metadata["project_dir"] = data["cwd"]
-
-                if "timestamp" in data:
-                    timestamp = data["timestamp"]
-                    if metadata["start_time"] is None or timestamp < metadata["start_time"]:
-                        metadata["start_time"] = timestamp
-                    if metadata["end_time"] is None or timestamp > metadata["end_time"]:
-                        metadata["end_time"] = timestamp
-
-                # Count message types
-                if "message" in data and "role" in data["message"]:
-                    role = data["message"]["role"]
-                    if role == "user":
-                        metadata["user_messages"] += 1
-                    elif role == "assistant":
-                        metadata["assistant_messages"] += 1
-                        if "model" in data["message"]:
-                            metadata["models_used"].add(data["message"]["model"])
-
-                # Count tool uses
-                if "message" in data and "content" in data["message"]:
-                    for content in data["message"]["content"]:
-                        if isinstance(content, dict) and content.get("type") == "tool_use":
-                            metadata["tool_uses"] += 1
-
             except json.JSONDecodeError:
                 continue
 
+            messages.append(data)
+
+            if metadata["session_id"] is None and "sessionId" in data:
+                metadata["session_id"] = data["sessionId"]
+
+            if metadata["project_dir"] is None and "cwd" in data:
+                metadata["project_dir"] = data["cwd"]
+
+            if "timestamp" in data:
+                timestamp = data["timestamp"]
+                if metadata["start_time"] is None or timestamp < metadata["start_time"]:
+                    metadata["start_time"] = timestamp
+                if metadata["end_time"] is None or timestamp > metadata["end_time"]:
+                    metadata["end_time"] = timestamp
+
+            if "message" in data and "role" in data["message"]:
+                role = data["message"]["role"]
+                if role == "user":
+                    metadata["user_messages"] += 1
+                elif role == "assistant":
+                    metadata["assistant_messages"] += 1
+
+            if "message" in data and "content" in data["message"]:
+                for content in data["message"]["content"]:
+                    if isinstance(content, dict) and content.get("type") == "tool_use":
+                        metadata["tool_uses"] += 1
+
     metadata["total_messages"] = len(messages)
-    metadata["models_used"] = list(metadata["models_used"])
 
-    return messages, metadata
+    return SessionRecord(
+        path=file_path,
+        session_id=metadata["session_id"] or file_path.stem,
+        start_time=metadata["start_time"],
+        end_time=metadata["end_time"],
+        project_dir=metadata["project_dir"],
+        messages=messages,
+        stats={
+            "total_messages": metadata["total_messages"],
+            "user_messages": metadata["user_messages"],
+            "assistant_messages": metadata["assistant_messages"],
+            "tool_uses": metadata["tool_uses"],
+        },
+    )
 
 
-def format_message_markdown(message_data):
-    """Format a single message as markdown."""
-    output = []
+def load_existing_session_ids(output_dir: Path) -> Dict[str, Path]:
+    """Read already-rendered sessions by scanning for their Session ID lines."""
+    recorded: Dict[str, Path] = {}
+    if not output_dir.exists():
+        return recorded
 
-    if "message" not in message_data:
+    for file_path in output_dir.glob("*.md"):
+        try:
+            with file_path.open("r", encoding="utf-8") as handle:
+                for _ in range(20):
+                    line = handle.readline()
+                    if not line:
+                        break
+                    match = SESSION_ID_PATTERN.search(line)
+                    if match:
+                        recorded[match.group(1)] = file_path
+                        break
+        except OSError:
+            continue
+
+    return recorded
+
+
+def normalise_title(text: str) -> str:
+    """Collapse whitespace for display strings."""
+    return re.sub(r"\s+", " ", text.strip())
+
+
+def condense_value(value, max_len: int = 32) -> str:
+    """Return a short, human readable representation of a value."""
+    if isinstance(value, (list, tuple)):
+        rendered = ", ".join(condense_value(v, max_len=12) for v in value[:2])
+        if len(value) > 2:
+            rendered += ", …"
+    elif isinstance(value, dict):
+        keys = list(value.keys())
+        rendered = "{"
+        if keys:
+            rendered += f"{keys[0]}=…"
+            if len(keys) > 1:
+                rendered += ", …"
+        rendered += "}"
+    else:
+        rendered = str(value)
+
+    rendered = re.sub(r"\s+", " ", rendered.strip())
+    if len(rendered) > max_len:
+        rendered = rendered[: max_len - 1] + "…"
+    return rendered
+
+
+def truncate_summary(summary: str, max_len: int = SUMMARY_MAX_LENGTH) -> str:
+    """Trim summary text to a safe length."""
+    summary = re.sub(r"\s+", " ", summary.strip())
+    if len(summary) > max_len:
+        return summary[: max_len - 1] + "…"
+    return summary
+
+
+def condensed_timestamp(timestamp: Optional[datetime]) -> str:
+    """Return HH:MM timestamp or placeholder."""
+    if not timestamp:
+        return "--:--"
+    return timestamp.strftime("%H:%M")
+
+
+def condensed_model_name(model: Optional[str]) -> str:
+    """Produce a short, human-friendly model label."""
+    if not model:
+        return ""
+    token = model.split("/")[-1]
+    token = token.replace("claude-", "")
+    parts = [p for p in token.split("-") if p]
+    if not parts:
+        return token.capitalize()
+    primary = parts[0].lower()
+    lookup = {
+        "sonnet": "Sonnet",
+        "opus": "Opus",
+        "haiku": "Haiku",
+        "gpt": "GPT",
+    }
+    if primary in lookup:
+        return lookup[primary]
+    return primary.capitalize()
+
+
+def format_duration_label(start: datetime, end: Optional[datetime]) -> str:
+    """Create a compact, human-readable duration string."""
+    if end is None or end <= start:
+        return "unknown"
+
+    total_seconds = int((end - start).total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    parts: List[str] = []
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if not parts and seconds:
+        parts.append(f"{seconds}s")
+    elif seconds and hours == 0 and minutes < 5:
+        parts.append(f"{seconds}s")
+
+    if not parts:
+        parts.append("<1s")
+
+    return " ".join(parts)
+
+
+def summarise_tool_use(part: dict) -> str:
+    name = part.get("name", "tool")
+    input_payload = part.get("input")
+    if isinstance(input_payload, dict) and input_payload:
+        key = next(iter(input_payload))
+        value = condense_value(input_payload[key])
+        return f"{name} {key}={value}"
+    return name
+
+
+def summarise_tool_result(part: dict) -> str:
+    identifier = part.get("tool_use_id") or part.get("name") or "result"
+    content = part.get("content", "")
+    if isinstance(content, str) and content.strip():
+        value = condense_value(content.strip(), max_len=40)
+        return f"{identifier} → {value}"
+    if isinstance(content, list) and content:
+        value = condense_value(content[0], max_len=40)
+        return f"{identifier} → {value}"
+    return f"{identifier} (no content)"
+
+
+def summarise_usage(usage: dict) -> Optional[str]:
+    if not usage:
+        return None
+    in_tok = usage.get("input_tokens")
+    out_tok = usage.get("output_tokens")
+    if in_tok is None and out_tok is None:
+        return None
+    if in_tok is not None and out_tok is not None:
+        return f"tok {in_tok}/{out_tok}"
+    if in_tok is not None:
+        return f"in {in_tok}"
+    return f"out {out_tok}"
+
+
+def summarise_tool_metadata(tool_meta: dict) -> Optional[str]:
+    if not isinstance(tool_meta, dict):
+        return None
+    duration = tool_meta.get("durationMs")
+    if duration is None:
+        return None
+    seconds = duration / 1000
+    if seconds >= 1:
+        return f"{seconds:.1f}s"
+    return f"{seconds*1000:.0f}ms"
+
+
+def summarise_message(message: dict) -> str:
+    """Create a condensed single-line summary for messages without primary text."""
+    msg = message.get("message", {})
+    content = msg.get("content")
+    summaries: List[str] = []
+
+    if isinstance(content, list):
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            kind = part.get("type")
+            if kind == "tool_use":
+                summaries.append(f"tool {summarise_tool_use(part)}")
+            elif kind == "tool_result":
+                summaries.append(f"result {summarise_tool_result(part)}")
+            elif kind == "thinking":
+                summaries.append("internal reasoning")
+            elif kind == "text":
+                text = part.get("text", "").strip()
+                if text:
+                    summaries.append(condense_value(text, max_len=40))
+    elif isinstance(content, str) and content.strip():
+        summaries.append(condense_value(content.strip(), max_len=60))
+
+    usage_summary = summarise_usage(msg.get("usage", {}))
+    if usage_summary:
+        summaries.append(usage_summary)
+
+    metadata_summary = summarise_tool_metadata(message.get("toolUseResult", {}))
+    if metadata_summary:
+        summaries.append(metadata_summary)
+
+    if not summaries:
+        event_type = message.get("type") or msg.get("role") or "event"
+        summaries.append(f"{event_type} (no content)")
+
+    return truncate_summary("; ".join(summaries))
+
+
+def build_compact_line(
+    timestamp: Optional[datetime], role: str, icon: str, model: Optional[str], summary: str
+) -> str:
+    """Assemble compact single-line representation for non-detailed messages."""
+    ts = condensed_timestamp(timestamp)
+    if role == "assistant":
+        descriptor = condensed_model_name(model) or "Assistant"
+    elif role == "user":
+        descriptor = "User"
+    else:
+        descriptor = role.capitalize()
+    components = [ts, icon, descriptor, "—", summary]
+    return " ".join(part for part in components if part)
+
+
+def format_primary_and_details(message: dict) -> Tuple[str, List[Tuple[str, str, str]]]:
+    """
+    Return the primary text along with detail sections.
+
+    Detail tuples are (title, body, block_type) where block_type is one of
+    "text", "code", or "json".
+    """
+    if "message" not in message:
+        return "", []
+
+    msg = message["message"]
+    content = msg.get("content", "")
+    role = msg.get("role", "assistant")
+
+    if isinstance(content, str):
+        return content.strip(), []
+
+    if not isinstance(content, list):
+        return "", []
+
+    primary_fragments: List[str] = []
+    details: List[Tuple[str, str, str]] = []
+
+    for idx, part in enumerate(content):
+        if not isinstance(part, dict):
+            continue
+
+        part_type = part.get("type")
+
+        if part_type == "text":
+            text_value = part.get("text", "").strip()
+            if not text_value:
+                continue
+
+            if role == "assistant":
+                if not primary_fragments:
+                    primary_fragments.append(text_value)
+                else:
+                    details.append(("Additional Text", text_value, "text"))
+            else:
+                # User prompts include all text as part of the primary body.
+                primary_fragments.append(text_value)
+
+        elif part_type == "thinking":
+            details.append(
+                (
+                    "Internal Reasoning",
+                    part.get("thinking", "").strip(),
+                    "code",
+                )
+            )
+
+        elif part_type == "tool_use":
+            tool_name = part.get("name", "unknown tool")
+            tool_id = part.get("id", "")
+            payload = json.dumps(part.get("input", {}), indent=2)
+            title = f"Tool Use — {tool_name}"
+            if tool_id:
+                title += f" ({tool_id})"
+            details.append((title, payload, "json"))
+
+        elif part_type == "tool_result":
+            title = "Tool Result"
+            if "tool_use_id" in part:
+                title += f" ({part['tool_use_id']})"
+            result_content = part.get("content", "")
+            if isinstance(result_content, str):
+                body = result_content.strip()
+                block_type = "code"
+            else:
+                body = json.dumps(result_content, indent=2)
+                block_type = "json"
+            details.append((title, body, block_type))
+
+    primary_text = "\n\n".join(primary_fragments).strip()
+    return primary_text, details
+
+
+def format_message_markdown(message: dict) -> str:
+    """Generate compact markdown for a single Claude message."""
+    if "message" not in message:
         return ""
 
-    msg = message_data["message"]
-    timestamp = message_data.get("timestamp", "")
+    msg = message["message"]
+    timestamp = parse_timestamp(message.get("timestamp", ""))
+    ts_label = timestamp.strftime("%Y-%m-%d %H:%M:%S %Z") if timestamp else "Unknown time"
 
-    # Add timestamp
-    if timestamp:
-        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        output.append(f"**[{dt.strftime('%Y-%m-%d %H:%M:%S')}]**")
-
-    # Add role header
     role = msg.get("role", "unknown")
-    if role == "user":
-        output.append("\n### 👤 User\n")
-    elif role == "assistant":
-        model = msg.get("model", "")
-        output.append(f"\n### 🤖 Assistant ({model})\n")
+    icon = "👤" if role == "user" else "🤖"
+    model = ""
+    if role == "assistant" and msg.get("model"):
+        model = f" ({msg['model']})"
 
-    # Process content
-    if "content" in msg:
-        if isinstance(msg["content"], str):
-            output.append(msg["content"])
-        elif isinstance(msg["content"], list):
-            for content in msg["content"]:
-                if isinstance(content, dict):
-                    content_type = content.get("type")
+    header = f"### [{ts_label}] {icon} {role.capitalize()}{model}"
+    primary_text, detail_sections = format_primary_and_details(message)
 
-                    if content_type == "text":
-                        output.append(content.get("text", ""))
+    if primary_text:
+        lines: List[str] = [header]
+        lines.extend(["", primary_text, ""])
+        extra_details = gather_message_metadata_details(message, detail_sections)
+        if extra_details:
+            lines.extend(render_details_block(extra_details))
+        return "\n".join(line for line in lines if line is not None).strip()
 
-                    elif content_type == "thinking":
-                        output.append("\n<details>")
-                        output.append("<summary>💭 Internal Reasoning (click to expand)</summary>\n")
-                        output.append("```")
-                        output.append(content.get("thinking", ""))
-                        output.append("```")
-                        output.append("</details>\n")
-
-                    elif content_type == "tool_use":
-                        tool_name = content.get("name", "unknown")
-                        tool_id = content.get("id", "")
-                        output.append(f"\n🔧 **Tool Use: {tool_name}** (ID: {tool_id})")
-                        output.append("```json")
-                        output.append(json.dumps(content.get("input", {}), indent=2))
-                        output.append("```\n")
-
-                    elif content_type == "tool_result":
-                        output.append("\n📊 **Tool Result:**")
-                        output.append("```")
-                        result = content.get("content", "")
-                        if isinstance(result, str):
-                            output.append(result[:5000])  # Limit length
-                            if len(result) > 5000:
-                                output.append(f"\n... (truncated, {len(result) - 5000} chars omitted)")
-                        else:
-                            output.append(str(result))
-                        output.append("```\n")
-
-    return "\n".join(output)
+    summary_line = summarise_message(message)
+    return build_compact_line(timestamp, role, icon, msg.get("model"), summary_line)
 
 
-def format_message_xml(message_data, parent_element):
-    """Format a single message as XML element."""
-    msg_elem = ET.SubElement(parent_element, "message")
+def gather_message_metadata_details(
+    message: dict, detail_sections: List[Tuple[str, str, str]]
+) -> List[Tuple[str, str, str]]:
+    """Attach usage metadata to the detail view."""
+    combined = list(detail_sections)
 
-    # Add attributes
-    msg_elem.set("uuid", message_data.get("uuid", ""))
-    if message_data.get("parentUuid"):
-        msg_elem.set("parent-uuid", message_data["parentUuid"])
-    msg_elem.set("timestamp", message_data.get("timestamp", ""))
+    msg = message.get("message", {})
+    usage = msg.get("usage")
+    if isinstance(usage, dict):
+        payload = json.dumps(usage, indent=2)
+        combined.append(("Token Usage", payload, "json"))
 
-    # Add metadata
-    if "type" in message_data:
-        ET.SubElement(msg_elem, "event-type").text = message_data["type"]
-    if "cwd" in message_data:
-        ET.SubElement(msg_elem, "working-directory").text = message_data["cwd"]
-    if "requestId" in message_data:
-        ET.SubElement(msg_elem, "request-id").text = message_data["requestId"]
+    tool_result_meta = message.get("toolUseResult")
+    if isinstance(tool_result_meta, dict):
+        payload = json.dumps(tool_result_meta, indent=2)
+        combined.append(("Tool Execution Metadata", payload, "json"))
 
-    # Process message content
-    if "message" in message_data:
-        msg = message_data["message"]
-
-        # Add role
-        if "role" in msg:
-            ET.SubElement(msg_elem, "role").text = msg["role"]
-
-        # Add model info
-        if "model" in msg:
-            ET.SubElement(msg_elem, "model").text = msg["model"]
-
-        # Process content
-        if "content" in msg:
-            content_elem = ET.SubElement(msg_elem, "content")
-
-            if isinstance(msg["content"], str):
-                content_elem.text = msg["content"]
-            elif isinstance(msg["content"], list):
-                for content in msg["content"]:
-                    if isinstance(content, dict):
-                        content_type = content.get("type")
-
-                        if content_type == "text":
-                            text_elem = ET.SubElement(content_elem, "text")
-                            text_elem.text = clean_text_for_xml(content.get("text", ""))
-
-                        elif content_type == "thinking":
-                            thinking_elem = ET.SubElement(content_elem, "thinking")
-                            if "signature" in content:
-                                thinking_elem.set("signature", content["signature"])
-                            thinking_elem.text = clean_text_for_xml(content.get("thinking", ""))
-
-                        elif content_type == "tool_use":
-                            tool_elem = ET.SubElement(content_elem, "tool-use")
-                            tool_elem.set("id", content.get("id", ""))
-                            tool_elem.set("name", content.get("name", ""))
-
-                            input_elem = ET.SubElement(tool_elem, "input")
-                            input_elem.text = clean_text_for_xml(json.dumps(content.get("input", {}), indent=2))
-
-                        elif content_type == "tool_result":
-                            result_elem = ET.SubElement(content_elem, "tool-result")
-                            if "tool_use_id" in content:
-                                result_elem.set("tool-use-id", content["tool_use_id"])
-
-                            result_content = content.get("content", "")
-                            if isinstance(result_content, str):
-                                result_elem.text = clean_text_for_xml(result_content)
-                            else:
-                                result_elem.text = clean_text_for_xml(str(result_content))
-
-        # Add usage info
-        if "usage" in msg:
-            usage_elem = ET.SubElement(msg_elem, "usage")
-            usage = msg["usage"]
-
-            if "input_tokens" in usage:
-                ET.SubElement(usage_elem, "input-tokens").text = str(usage["input_tokens"])
-            if "output_tokens" in usage:
-                ET.SubElement(usage_elem, "output-tokens").text = str(usage["output_tokens"])
-            if "cache_creation_input_tokens" in usage:
-                ET.SubElement(usage_elem, "cache-creation-tokens").text = str(usage["cache_creation_input_tokens"])
-            if "cache_read_input_tokens" in usage:
-                ET.SubElement(usage_elem, "cache-read-tokens").text = str(usage["cache_read_input_tokens"])
-            if "service_tier" in usage:
-                ET.SubElement(usage_elem, "service-tier").text = usage["service_tier"]
-
-    # Add tool result metadata if present
-    if "toolUseResult" in message_data:
-        tool_result = message_data["toolUseResult"]
-        if isinstance(tool_result, dict):
-            tool_meta = ET.SubElement(msg_elem, "tool-execution-metadata")
-
-            if "bytes" in tool_result:
-                ET.SubElement(tool_meta, "response-bytes").text = str(tool_result["bytes"])
-            if "code" in tool_result:
-                ET.SubElement(tool_meta, "response-code").text = str(tool_result["code"])
-            if "codeText" in tool_result:
-                ET.SubElement(tool_meta, "response-text").text = tool_result["codeText"]
-            if "durationMs" in tool_result:
-                ET.SubElement(tool_meta, "duration-ms").text = str(tool_result["durationMs"])
-            if "url" in tool_result:
-                ET.SubElement(tool_meta, "url").text = tool_result["url"]
+    return combined
 
 
-def prettify_xml(elem):
-    """Return a pretty-printed XML string for the Element."""
-    try:
-        rough_string = ET.tostring(elem, encoding="unicode", method="xml")
-        reparsed = minidom.parseString(rough_string)
-        return reparsed.toprettyxml(indent="  ")
-    except Exception as e:
-        # Fallback: return unprettified XML if pretty printing fails
-        print(f"⚠️  XML prettification failed: {e}")
-        return ET.tostring(elem, encoding="unicode", method="xml")
+def render_details_block(sections: Iterable[Tuple[str, str, str]]) -> List[str]:
+    """Render a <details> block from detail section tuples."""
+    details = list(sections)
+    if not details:
+        return []
 
-
-def export_session(session_info, output_dir=None, output_format="all", copy_to_cwd=None):
-    """Export a session to the specified output directory.
-
-    Args:
-        session_info: Session information dictionary
-        output_dir: Output directory path (default: ~/claude_sessions/exports)
-        output_format: Format to export ('md', 'xml', or 'all')
-        copy_to_cwd: Whether to copy export to current directory (default: check env var)
-    """
-    if output_dir is None:
-        output_dir = Path.home() / "claude_sessions" / "exports"
-
-    # Parse the session file
-    messages, metadata = parse_jsonl_file(session_info["path"])
-
-    # Create output directory with timestamp and actual session ID from metadata
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    # Use the actual session ID from the file content, not the filename
-    actual_session_id = metadata["session_id"] if metadata["session_id"] else session_info["session_id"]
-    export_dir = output_dir / f"{timestamp}_{actual_session_id[:8]}"
-    export_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save metadata
-    metadata_path = export_dir / "session_info.json"
-    with open(metadata_path, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
-
-    # Copy raw JSONL
-    raw_path = export_dir / "raw_messages.jsonl"
-    shutil.copy2(session_info["path"], raw_path)
-
-    # Generate output based on format
-    if output_format in ["md", "all"]:
-        # Generate markdown conversation
-        md_path = export_dir / "conversation_full.md"
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write(f"# Claude Code Session Export\n\n")
-            f.write(f"**Session ID:** `{metadata['session_id']}`\n")
-            f.write(f"**Project:** `{metadata['project_dir']}`\n")
-            f.write(f"**Start Time:** {metadata['start_time']}\n")
-            f.write(f"**End Time:** {metadata['end_time']}\n")
-            f.write(f"**Total Messages:** {metadata['total_messages']}\n")
-            f.write(f"**User Messages:** {metadata['user_messages']}\n")
-            f.write(f"**Assistant Messages:** {metadata['assistant_messages']}\n")
-            f.write(f"**Tool Uses:** {metadata['tool_uses']}\n")
-            f.write(f"**Models Used:** {', '.join(metadata['models_used'])}\n\n")
-            f.write("---\n\n")
-
-            for msg in messages:
-                formatted = format_message_markdown(msg)
-                if formatted:
-                    f.write(formatted)
-                    f.write("\n\n---\n\n")
-
-    if output_format in ["xml", "all"]:
-        # Generate XML conversation
-        root = ET.Element("claude-session")
-        root.set("xmlns", "https://claude.ai/session-export/v1")
-        root.set("export-version", "1.0")
-
-        # Add metadata
-        meta_elem = ET.SubElement(root, "metadata")
-        ET.SubElement(meta_elem, "session-id").text = metadata["session_id"]
-        ET.SubElement(meta_elem, "version").text = messages[0].get("version", "") if messages else ""
-        ET.SubElement(meta_elem, "working-directory").text = metadata["project_dir"]
-        ET.SubElement(meta_elem, "start-time").text = metadata["start_time"]
-        ET.SubElement(meta_elem, "end-time").text = metadata["end_time"]
-        ET.SubElement(meta_elem, "export-time").text = datetime.now().isoformat()
-
-        # Add statistics
-        stats_elem = ET.SubElement(meta_elem, "statistics")
-        ET.SubElement(stats_elem, "total-messages").text = str(metadata["total_messages"])
-        ET.SubElement(stats_elem, "user-messages").text = str(metadata["user_messages"])
-        ET.SubElement(stats_elem, "assistant-messages").text = str(metadata["assistant_messages"])
-        ET.SubElement(stats_elem, "tool-uses").text = str(metadata["tool_uses"])
-
-        models_elem = ET.SubElement(stats_elem, "models-used")
-        for model in metadata["models_used"]:
-            ET.SubElement(models_elem, "model").text = model
-
-        # Add messages
-        messages_elem = ET.SubElement(root, "messages")
-        for msg in messages:
-            format_message_xml(msg, messages_elem)
-
-        # Write XML file
-        xml_path = export_dir / "conversation_full.xml"
-        xml_string = prettify_xml(root)
-        with open(xml_path, "w", encoding="utf-8") as f:
-            f.write(xml_string)
-
-    # Generate summary
-    summary_path = export_dir / "summary.txt"
-    with open(summary_path, "w", encoding="utf-8") as f:
-        f.write(f"Claude Code Session Summary\n")
-        f.write(f"==========================\n\n")
-        f.write(f"Session ID: {metadata['session_id']}\n")
-        f.write(f"Export Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Project Directory: {metadata['project_dir']}\n")
-        f.write(f"Duration: {metadata['start_time']} to {metadata['end_time']}\n")
-        f.write(f"\nStatistics:\n")
-        f.write(f"- Total Messages: {metadata['total_messages']}\n")
-        f.write(f"- User Messages: {metadata['user_messages']}\n")
-        f.write(f"- Assistant Messages: {metadata['assistant_messages']}\n")
-        f.write(f"- Tool Uses: {metadata['tool_uses']}\n")
-        f.write(f"- Models: {', '.join(metadata['models_used'])}\n")
-        f.write(f"\nExported to: {export_dir}\n")
-
-    # Check if we should copy to current working directory
-    if copy_to_cwd is None:
-        # Check environment variable (default: True unless explicitly disabled)
-        copy_to_cwd = os.environ.get("CLAUDE_EXPORT_COPY_TO_CWD", "true").lower() != "false"
-
-    if copy_to_cwd:
-        # Copy export folder to current working directory
-        cwd = Path.cwd()
-        cwd_export_name = f"claude_export_{timestamp}_{actual_session_id[:8]}"
-        cwd_export_path = cwd / cwd_export_name
-
-        try:
-            # Copy the entire export directory to CWD
-            shutil.copytree(export_dir, cwd_export_path)
-            print(f"\n📂 Export copied to current directory: {cwd_export_path}")
-        except Exception as e:
-            print(f"\n⚠️  Could not copy to current directory: {e}")
-
-    return export_dir
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Export Claude Code session")
-    parser.add_argument("--session-id", help="Specific session ID to export")
-    parser.add_argument("--output-dir", help="Custom output directory")
-    parser.add_argument("--format", choices=["md", "xml", "all"], default="all", help="Output format (default: all)")
-    parser.add_argument(
-        "--max-age", type=int, default=300, help="Max age in seconds for active session detection (default: 300)"
-    )
-    parser.add_argument("--no-copy-to-cwd", action="store_true", help="Do not copy export to current directory")
-
-    args = parser.parse_args()
-
-    # Get current working directory
-    cwd = os.getcwd()
-
-    print(f"🔍 Looking for Claude Code sessions in: {cwd}")
-
-    # Find all sessions for this project
-    sessions = find_project_sessions(cwd)
-
-    if not sessions:
-        print("❌ No Claude Code sessions found for this project.")
-        print("   Make sure you're running this from a project directory with active Claude Code sessions.")
-        return 1
-
-    print(f"📂 Found {len(sessions)} session(s) for this project")
-
-    # Determine which session to export
-    if args.session_id:
-        # Find specific session
-        session_to_export = None
-        for session in sessions:
-            if session["session_id"] == args.session_id:
-                session_to_export = session
-                break
-
-        if not session_to_export:
-            print(f"❌ Session ID {args.session_id} not found.")
-            return 1
-    else:
-        # Find active session
-        active_sessions = find_active_session(sessions, args.max_age)
-
-        if not active_sessions:
-            print(f"⚠️  No active sessions found (modified within {args.max_age} seconds).")
-            print("\nAvailable sessions:")
-            for i, session in enumerate(sessions[:5]):  # Show first 5
-                age = int(time.time() - session["mtime"])
-                print(f"  {i + 1}. {session['session_id'][:8]}... (modified {age}s ago)")
-
-            # Use most recent session
-            print("\n🔄 Exporting most recent session...")
-            session_to_export = sessions[0]
-        elif len(active_sessions) == 1:
-            session_to_export = active_sessions[0]
+    lines = ["<details>", "<summary>Details</summary>", ""]
+    for title, body, block_type in details:
+        title = normalise_title(title)
+        lines.append(f"#### {title}")
+        if block_type == "json":
+            lines.append("```json")
+            lines.append(body)
+            lines.append("```")
+        elif block_type == "code":
+            lines.append("```")
+            lines.append(body)
+            lines.append("```")
         else:
-            # Multiple active sessions - try to identify current one
-            print(f"🔍 Found {len(active_sessions)} active sessions:")
-            for i, session in enumerate(active_sessions):
-                age = int(time.time() - session["mtime"])
-                print(f"  {i + 1}. {session['session_id'][:8]}... (modified {age}s ago)")
+            lines.append(body)
+        lines.append("")
+    lines.append("</details>")
+    lines.append("")
+    return lines
 
-            print("\n🎯 Attempting to identify current session...")
 
-            # Try to identify the current session
-            current_session = identify_current_session(sessions, cwd)
+def build_markdown(session: SessionRecord) -> str:
+    """Assemble the Markdown transcript for a session."""
+    start_dt = session.start_datetime
+    end_dt = parse_timestamp(session.end_time or "")
 
-            if current_session:
-                print(f"✅ Successfully identified current session: {current_session['session_id']}")
-                session_to_export = current_session
-            else:
-                # Fallback: check if we're in Claude Code
-                claude_pid = get_parent_claude_pid()
-                if claude_pid:
-                    print(f"🔍 Running in Claude Code (PID: {claude_pid})")
-                    print("⚠️  Could not identify specific session via activity. Using most recent.")
-                else:
-                    print("⚠️  Not running inside Claude Code. Using most recent session.")
+    header_lines = [
+        f"# Claude Code Session — {start_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}",
+        "",
+        f"- Session ID: `{session.session_id}`",
+        f"- Project: `{session.project_dir or ''}`",
+        f"- Started: {start_dt.isoformat()}",
+    ]
 
-                session_to_export = active_sessions[0]
-                print(f"📌 Defaulting to: {session_to_export['session_id']}")
+    if end_dt:
+        header_lines.append(f"- Ended: {end_dt.isoformat()}")
+    header_lines.extend(
+        [
+            f"- Total Messages: {session.stats['total_messages']} "
+            f"(user: {session.stats['user_messages']}, assistant: {session.stats['assistant_messages']})",
+            f"- Tool Uses: {session.stats['tool_uses']}",
+            "",
+            "---",
+            "",
+            "## Conversation",
+            "",
+        ]
+    )
 
-    # Export the session
-    print(f"\n📤 Exporting session file: {session_to_export['session_id'][:8]}...")
+    body_blocks: List[str] = []
+    for message in session.messages:
+        rendered = format_message_markdown(message)
+        if rendered:
+            body_blocks.append(rendered)
+            body_blocks.append("")  # Spacer between messages.
 
-    output_dir = Path(args.output_dir) if args.output_dir else None
-    # Pass copy_to_cwd as False if --no-copy-to-cwd is specified, otherwise None (use default)
-    copy_to_cwd = False if args.no_copy_to_cwd else None
-    export_path = export_session(session_to_export, output_dir, args.format, copy_to_cwd)
+    return "\n".join(header_lines + body_blocks).rstrip() + "\n"
 
-    # Check if actual session ID differs from filename
-    session_info_file = export_path / "session_info.json"
-    if session_info_file.exists():
-        with open(session_info_file, "r") as f:
-            actual_metadata = json.load(f)
-            actual_session_id = actual_metadata.get("session_id", "")
-            if actual_session_id and actual_session_id != session_to_export["session_id"]:
-                print(f"ℹ️  Note: Actual session ID is {actual_session_id}")
-                print(f"   (File was named {session_to_export['session_id']})")
 
-    print(f"\n✅ Session exported successfully!")
-    print(f"📁 Output directory: {export_path}")
-    print(f"\nFiles created:")
-    for file in export_path.iterdir():
-        print(f"  - {file.name}")
+def derive_output_filename(session: SessionRecord) -> str:
+    """Generate a tidy filename for the session markdown."""
+    start_slug = session.start_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+    short_id = session_short_id(session)
+    return f"{start_slug}_{short_id}.md"
 
-    # Show summary
-    summary_file = export_path / "summary.txt"
-    if summary_file.exists():
-        print(f"\n📋 Summary:")
-        with open(summary_file, "r") as f:
-            print(f.read())
+
+def write_markdown(output_dir: Path, session: SessionRecord, overwrite: bool = False) -> Path:
+    """Persist the rendered markdown to disk."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / derive_output_filename(session)
+
+    if output_path.exists() and not overwrite:
+        return output_path
+
+    markdown = build_markdown(session)
+    output_path.write_text(markdown, encoding="utf-8")
+    return output_path
+
+
+def format_nav_label(session: SessionRecord) -> str:
+    """Build the navigation label with timestamp and duration."""
+    start_dt = session.start_datetime
+    end_dt = parse_timestamp(session.end_time or "")
+    duration = format_duration_label(start_dt, end_dt)
+    return f"{start_dt.strftime('%Y-%m-%d %H:%M')} ({duration})"
+
+
+def update_mkdocs_nav(project_root: Path, rendered_files: Sequence[Tuple[SessionRecord, Path]]) -> None:
+    """Add rendered sessions to the mkdocs navigation sorted by timestamp."""
+    if not rendered_files:
+        return
+
+    mkdocs_path = project_root / "mkdocs.yml"
+    if not mkdocs_path.exists():
+        raise RuntimeError("mkdocs.yml not found; cannot update navigation.")
+
+    lines = mkdocs_path.read_text().splitlines()
+    section_label = "- Claude Code Sessions"
+    section_index = next((i for i, line in enumerate(lines) if section_label in line), None)
+
+    if section_index is None:
+        raise RuntimeError("Claude Code Sessions nav section not found in mkdocs.yml.")
+
+    start_line = lines[section_index]
+    base_indent = re.match(r"^\s*", start_line).group(0)
+    child_indent = base_indent + "  "
+
+    # Find the extent of the section (up to the next top-level nav item).
+    end_index = section_index + 1
+    while end_index < len(lines):
+        line = lines[end_index]
+        if re.match(rf"^{base_indent}-\s+\S", line) and not line.startswith(child_indent):
+            break
+        end_index += 1
+
+    section_body = lines[section_index + 1 : end_index]
+
+    managed_entries: Dict[str, str] = {}
+    preserved_lines: List[str] = []
+
+    for line in section_body:
+        if line.startswith(f"{child_indent}- "):
+            entry = line.strip()[2:]  # drop leading "- "
+            if ":" in entry:
+                label_part, path_part = entry.rsplit(":", 1)
+                path = path_part.strip()
+                label = label_part.strip()
+                if path.startswith(f"{SESSION_LOG_DIR_NAME}/"):
+                    managed_entries[path] = label
+                    continue
+        preserved_lines.append(line)
+
+    for session, output_path in rendered_files:
+        rel_path = f"{SESSION_LOG_DIR_NAME}/{output_path.name}"
+        label = format_nav_label(session)
+        managed_entries[rel_path] = label
+
+    sortable_entries: List[Tuple[datetime, str, str]] = []
+    for rel_path, label in managed_entries.items():
+        match = TIMESTAMP_SLUG_PATTERN.match(Path(rel_path).name)
+        if match:
+            dt = datetime.strptime(match.group(1), "%Y-%m-%d_%H-%M-%S").replace(tzinfo=timezone.utc)
+        else:
+            dt = datetime.min.replace(tzinfo=timezone.utc)
+        sortable_entries.append((dt, label, rel_path))
+
+    sortable_entries.sort(key=lambda item: item[0], reverse=True)
+
+    new_section_body = [start_line]
+    for _, label, rel_path in sortable_entries:
+        new_section_body.append(f"{child_indent}- {label}: {rel_path}")
+
+    for line in preserved_lines:
+        if line.strip() or line == "":
+            new_section_body.append(line)
+
+    lines[section_index : end_index] = new_section_body
+    mkdocs_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def session_matches_project(session: SessionRecord, project_root: Path) -> bool:
+    """Ensure the session belongs to this repository."""
+    if not session.project_dir:
+        return False
+    try:
+        recorded = Path(session.project_dir).resolve()
+    except OSError:
+        return False
+    return recorded == project_root.resolve()
+
+
+def render_sessions(
+    project_root: Path,
+    overwrite: bool = False,
+    session_filter: Optional[str] = None,
+    dry_run: bool = False,
+) -> List[Tuple[SessionRecord, Path]]:
+    """Render matching sessions and return list of (session, output_path)."""
+    docs_dir = project_root / DOCS_SUBDIR
+    output_dir = docs_dir / SESSION_LOG_DIR_NAME
+
+    existing_sessions = load_existing_session_ids(output_dir)
+    rendered: List[Tuple[SessionRecord, Path]] = []
+
+    session_files = discover_session_files(project_root)
+    for file_path in session_files:
+        session = parse_jsonl_file(file_path)
+
+        if session_short_id(session) in IGNORED_SESSION_SUFFIXES:
+            continue
+
+        if session_filter and session.session_id != session_filter:
+            continue
+
+        if not session_matches_project(session, project_root):
+            continue
+
+        if not overwrite and session.session_id in existing_sessions:
+            continue
+
+        if dry_run:
+            rendered.append((session, output_dir / derive_output_filename(session)))
+            continue
+
+        output_path = write_markdown(output_dir, session, overwrite=overwrite)
+        rendered.append((session, output_path))
+
+    return rendered
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Render Claude Code session logs into docs/sessionslogs.")
+    parser.add_argument("--session-id", help="Render only the specified session ID.")
+    parser.add_argument("--overwrite", action="store_true", help="Re-render markdown even if it already exists.")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be rendered without writing files.")
+
+    args = parser.parse_args(argv)
+
+    project_root = find_project_root(Path.cwd())
+    rendered = render_sessions(
+        project_root=project_root,
+        overwrite=args.overwrite,
+        session_filter=args.session_id,
+        dry_run=args.dry_run,
+    )
+
+    if not rendered:
+        print("No new sessions rendered.")
+        return 0
+
+    if args.dry_run:
+        print("Sessions that would be rendered:")
+        for session, path in rendered:
+            print(f"  - {session.session_id} -> {path}")
+        return 0
+
+    update_mkdocs_nav(project_root, rendered)
+
+    print("Rendered session logs:")
+    for session, path in rendered:
+        print(f"  - {session.session_id} -> {path}")
 
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

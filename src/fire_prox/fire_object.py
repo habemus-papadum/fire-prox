@@ -212,7 +212,7 @@ class FireObject(BaseFireObject):
 
         return self
 
-    def save(self, doc_id: Optional[str] = None, transaction: Optional[Any] = None) -> 'FireObject':
+    def save(self, doc_id: Optional[str] = None, transaction: Optional[Any] = None, batch: Optional[Any] = None) -> 'FireObject':
         """
         Save the object's data to Firestore (synchronous).
 
@@ -225,6 +225,8 @@ class FireObject(BaseFireObject):
                    DETACHED object. If None, Firestore auto-generates an ID.
             transaction: Optional transaction object for transactional writes.
                         If provided, the write will be part of the transaction.
+            batch: Optional batch object for batched writes. If provided,
+                  the write will be accumulated in the batch (committed later).
 
         Returns:
             Self, to allow method chaining.
@@ -232,7 +234,7 @@ class FireObject(BaseFireObject):
         Raises:
             RuntimeError: If called on a DELETED object.
             ValueError: If DETACHED object has no parent collection, or if
-                       trying to create a new document within a transaction.
+                       trying to create a new document within a transaction or batch.
 
         State Transitions:
             DETACHED -> LOADED: Creates new document with doc_id or auto-ID
@@ -256,6 +258,12 @@ class FireObject(BaseFireObject):
                 user.credits += 10
                 user.save(transaction=transaction)
             update_user(transaction)
+
+            # Batch save
+            batch = db.batch()
+            user1.save(batch=batch)
+            user2.save(batch=batch)
+            batch.commit()  # Commit all operations
         """
         # Check if we're trying to save a DELETED object
         self._validate_not_deleted("save()")
@@ -266,6 +274,12 @@ class FireObject(BaseFireObject):
                 raise ValueError(
                     "Cannot create new documents (DETACHED -> LOADED) within a transaction. "
                     "Create the document first, then use transactions for updates."
+                )
+
+            if batch is not None:
+                raise ValueError(
+                    "Cannot create new documents (DETACHED -> LOADED) within a batch. "
+                    "Create the document first, then use batches for updates."
                 )
 
             if not self._parent_collection:
@@ -315,9 +329,11 @@ class FireObject(BaseFireObject):
             for field, operation in self._atomic_ops.items():
                 update_dict[field] = operation
 
-            # Perform partial update with or without transaction
+            # Perform partial update with transaction, batch, or direct
             if transaction is not None:
                 transaction.update(self._doc_ref, update_dict)
+            elif batch is not None:
+                batch.update(self._doc_ref, update_dict)
             else:
                 self._doc_ref.update(update_dict)
 
@@ -333,6 +349,8 @@ class FireObject(BaseFireObject):
             # For ATTACHED, we can just do a set operation
             if transaction is not None:
                 transaction.set(self._doc_ref, storage_data)
+            elif batch is not None:
+                batch.set(self._doc_ref, storage_data)
             else:
                 self._doc_ref.set(storage_data)
             object.__setattr__(self, '_state', State.LOADED)
@@ -341,13 +359,17 @@ class FireObject(BaseFireObject):
 
         return self
 
-    def delete(self) -> None:
+    def delete(self, batch: Optional[Any] = None) -> None:
         """
         Delete the document from Firestore (synchronous).
 
         Removes the document from Firestore and transitions the object to
         DELETED state. After deletion, the object retains its ID and path
         for reference but cannot be modified or saved.
+
+        Args:
+            batch: Optional batch object for batched deletes. If provided,
+                  the delete will be accumulated in the batch (committed later).
 
         Raises:
             ValueError: If called on a DETACHED object (no document to delete).
@@ -362,13 +384,22 @@ class FireObject(BaseFireObject):
             user.delete()  # Document removed from Firestore
             print(user.state)  # State.DELETED
             print(user.id)  # Still accessible: 'alovelace'
+
+            # Batch delete
+            batch = db.batch()
+            user1.delete(batch=batch)
+            user2.delete(batch=batch)
+            batch.commit()  # Commit all operations
         """
         # Validate state
         self._validate_not_detached("delete()")
         self._validate_not_deleted("delete()")
 
-        # Delete from Firestore (synchronous)
-        self._doc_ref.delete()
+        # Delete from Firestore (synchronous) with or without batch
+        if batch is not None:
+            batch.delete(self._doc_ref)
+        else:
+            self._doc_ref.delete()
 
         # Transition to DELETED state
         self._transition_to_deleted()

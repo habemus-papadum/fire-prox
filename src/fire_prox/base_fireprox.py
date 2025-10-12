@@ -125,6 +125,78 @@ class BaseFireProx:
         """
         return self._client.transaction()
 
+    def batch(self) -> Any:
+        """
+        Create a batch for accumulating multiple write operations.
+
+        Returns the native Firestore WriteBatch object that can be used
+        to accumulate write operations (set, update, delete) and commit
+        them atomically in a single request.
+
+        Unlike transactions, batches:
+        - Do NOT support read operations
+        - Do NOT require a decorator
+        - Do NOT automatically retry on conflicts
+        - DO guarantee operation order
+        - ARE more efficient for bulk writes
+
+        This method provides a convenient way to create batches without
+        manually accessing the underlying client. The returned batch
+        object is a native Firestore WriteBatch/AsyncWriteBatch.
+
+        Returns:
+            A native google.cloud.firestore.WriteBatch or
+            google.cloud.firestore.AsyncWriteBatch instance.
+
+        Example (Synchronous):
+            batch = db.batch()
+
+            # Accumulate operations
+            user1 = db.doc('users/alice')
+            user1.credits = 100
+            user1.save(batch=batch)
+
+            user2 = db.doc('users/bob')
+            user2.delete(batch=batch)
+
+            # Commit all operations atomically
+            batch.commit()
+
+        Example (Asynchronous):
+            batch = db.batch()
+
+            # Accumulate operations
+            user1 = db.doc('users/alice')
+            user1.credits = 100
+            await user1.save(batch=batch)
+
+            user2 = db.doc('users/bob')
+            await user2.delete(batch=batch)
+
+            # Commit all operations atomically
+            await batch.commit()
+
+        Example (Bulk Operations):
+            batch = db.batch()
+            users = db.collection('users')
+
+            # Create multiple documents in one batch
+            for i in range(100):
+                user = users.doc(f'user{i}')
+                user.name = f'User {i}'
+                user.save(batch=batch)
+
+            # All 100 documents created atomically
+            batch.commit()
+
+        Note:
+            - Batches can contain up to 500 operations
+            - All operations execute atomically (all-or-nothing)
+            - Operations execute in the order added
+            - Cannot save DETACHED documents in a batch
+        """
+        return self._client.batch()
+
     # =========================================================================
     # Utility Methods (SHARED)
     # =========================================================================
