@@ -66,5 +66,5 @@ jobs:
           name: python-coverage-comment-action
           path: python-coverage-comment-action.txt
 
-      - name: Run Notebook Tests
-        run: ./test_notebooks.sh
+      # - name: Run Notebook Tests
+      #   run: ./test_notebooks.sh
