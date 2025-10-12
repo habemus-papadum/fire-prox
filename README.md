@@ -1,5 +1,12 @@
 # Fire-Prox
 
+[![CI](https://github.com/habemus-papadum/fire-prox/actions/workflows/ci.yml/badge.svg)](https://github.com/habemus-papadum/fire-prox/actions/workflows/ci.yml)
+[![Coverage](https://raw.githubusercontent.com/habemus-papadum/fire-prox/python-coverage-comment-action-data/badge.svg)](https://htmlpreview.github.io/?https://github.com/habemus-papadum/fire-prox/blob/python-coverage-comment-action-data/htmlcov/index.html)
+[![Documentation](https://github.com/habemus-papadum/fire-prox/actions/workflows/docs.yml/badge.svg)](https://habemus-papadum.github.io/fire-prox/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 ## Setup
 
 Before running tests or using the project, make sure to install all dependencies:
