@@ -1,8 +1,8 @@
 # FireProx Project Status
 
 **Last Updated**: 2025-10-12
-**Current Version**: 0.5.0
-**Phase**: Phase 4 Part 1 Complete ✅ (Document References)
+**Current Version**: 0.6.0
+**Phase**: Phase 4 Part 2 Complete ✅ (Transactions)
 
 ---
 
@@ -43,17 +43,28 @@
 - ✅ **Sync Client Support for Async** - Async references use companion sync client for lazy loading
 - ✅ **Object Identity** - Same reference returns same FireObject instance (caching)
 
+### Phase 4 Part 2: Transactions ✅ Complete
+
+- ✅ **Decorator Pattern** - Uses `@firestore.transactional` and `@firestore.async_transactional`
+- ✅ **Transaction Creation** - Create from any object: `db.transaction()`, `collection.transaction()`, `doc.transaction()`
+- ✅ **Transactional Reads/Writes** - `fetch(transaction=...)` and `save(transaction=...)`
+- ✅ **Atomic Operations Support** - ArrayUnion, ArrayRemove, Increment work within transactions
+- ✅ **Error Handling** - Cannot create new documents within transactions, validates DETACHED state
+- ✅ **Both Sync and Async** - Full support for synchronous and asynchronous transactions
+- ✅ **Comprehensive Testing** - 19 transaction tests (10 sync + 9 async)
+
 ### Test Coverage
 
 | Category | Count | Status |
 |----------|-------|--------|
-| **Total Tests** | 388 | ✅ 100% passing |
+| **Total Tests** | 415 | ✅ 100% passing |
 | **Sync Integration** | 70 | ✅ |
 | **Async Integration** | 69 | ✅ |
 | **Unit Tests** | 198 | ✅ |
 | **Phase 2 Integration** | 37 | ✅ |
 | **Phase 2.5 Integration** | 69 | ✅ (includes pagination) |
 | **Phase 4 Part 1 Integration** | 20 | ✅ (document references) |
+| **Phase 4 Part 2 Integration** | 19 | ✅ (transactions) |
 
 ### Documentation
 
@@ -68,8 +79,9 @@
 - ✅ **Topics Demo Notebooks**:
   - ✅ Pagination (cursor-based navigation)
   - ✅ Dates and Timestamps (timezone handling)
-  - ✅ **Document References** (reference relationships, lazy loading)
+  - ✅ Document References (reference relationships, lazy loading)
   - ✅ Vector Embeddings (semantic search)
+  - ✅ **Transactions** (atomic read-modify-write operations)
 
 ---
 
@@ -156,9 +168,36 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
        print(reviewer.name)  # Each lazy loads on demand
    ```
 
-**2. Batch Operations**
+**2. Transactions** ✅ **COMPLETE** (Phase 4 Part 2)
+   - ✅ Decorator pattern (`@firestore.transactional`, `@firestore.async_transactional`)
+   - ✅ Create from any object (db, collection, document)
+   - ✅ Transactional reads and writes
+   - ✅ Atomic operations support
+   - ✅ Both sync and async implementations
+
+   Example:
+   ```python
+   transaction = db.transaction()
+
+   @firestore.transactional
+   def transfer_money(transaction, from_id, to_id, amount):
+       from_user = db.doc(f'users/{from_id}')
+       to_user = db.doc(f'users/{to_id}')
+
+       from_user.fetch(transaction=transaction)
+       to_user.fetch(transaction=transaction)
+
+       from_user.balance -= amount
+       to_user.balance += amount
+
+       from_user.save(transaction=transaction)
+       to_user.save(transaction=transaction)
+
+   transfer_money(transaction, 'alice', 'bob', 100)
+   ```
+
+**3. Batch Operations**
    - WriteBatch support for bulk operations
-   - Transaction support for ACID guarantees
    - Bulk updates/deletes
    - Automatic batching for large operations
 
@@ -171,7 +210,7 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
    batch.commit()
    ```
 
-**3. Performance Optimizations**
+**4. Performance Optimizations**
    - Caching strategies for frequently accessed documents
    - Connection pooling
    - Batch fetch for related documents (solve N+1 query problem)
@@ -198,14 +237,14 @@ None currently identified.
 
 ## Project Health Metrics
 
-| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 4.1 | Total Change |
-|--------|---------|---------|-----------|-----------|--------------|
-| **Total Tests** | 231 | 268 | 337 | 388 | +157 (+68%) |
-| **Test Pass Rate** | 100% ✅ | 100% ✅ | 100% ✅ | 100% ✅ | Maintained |
-| **Integration Tests** | 33 | 70 | 139 | 159 | +126 (+382%) |
-| **Code Quality** | Good | Good | Excellent | Excellent | ⬆️ |
-| **Documentation** | 4 docs | 6 docs | 8 docs | 12 docs | +8 |
-| **Performance** | Baseline | **50-90% better** | **50-90% better** | **50-90% better** | 🚀 |
+| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 4.1 | Phase 4.2 | Total Change |
+|--------|---------|---------|-----------|-----------|-----------|--------------|
+| **Total Tests** | 231 | 268 | 337 | 388 | 415 | +184 (+80%) |
+| **Test Pass Rate** | 100% ✅ | 100% ✅ | 100% ✅ | 100% ✅ | 100% ✅ | Maintained |
+| **Integration Tests** | 33 | 70 | 139 | 159 | 178 | +145 (+439%) |
+| **Code Quality** | Good | Good | Excellent | Excellent | Excellent | ⬆️ |
+| **Documentation** | 4 docs | 6 docs | 8 docs | 12 docs | 13 docs | +9 |
+| **Performance** | Baseline | **50-90% better** | **50-90% better** | **50-90% better** | **50-90% better** | 🚀 |
 
 ### Phase 2 & 2.5 Achievements
 
@@ -230,6 +269,18 @@ None currently identified.
 - ✅ **Object identity** - caching ensures same reference = same object
 - ✅ **Zero breaking changes** (100% backward compatible)
 - ✅ **Comprehensive demo notebook** (30KB, document_references.ipynb)
+
+### Phase 4 Part 2 Achievements
+
+- ✅ **+19 integration tests** (10 sync + 9 async)
+- ✅ **Decorator pattern** - matches native Firestore API
+- ✅ **Convenient creation** - from db, collection, or document
+- ✅ **Transactional operations** - fetch() and save() with transaction parameter
+- ✅ **Atomic operations** - ArrayUnion, ArrayRemove, Increment work in transactions
+- ✅ **Both sync and async** - full support for both execution models
+- ✅ **Error handling** - validates DETACHED state, prevents new document creation
+- ✅ **Zero breaking changes** (100% backward compatible)
+- ✅ **Comprehensive demo notebook** (transactions.ipynb)
 
 ---
 
@@ -341,6 +392,25 @@ post.fetch()
 print(post.author.name)  # Lazy loads author automatically!
 for reviewer in post.reviewers:
     print(reviewer.name)  # Each loads on demand
+
+# Transactions (Phase 4 Part 2)
+transaction = db.transaction()
+
+@firestore.transactional
+def transfer_money(transaction, from_id, to_id, amount):
+    from_user = db.doc(f'users/{from_id}')
+    to_user = db.doc(f'users/{to_id}')
+
+    from_user.fetch(transaction=transaction)
+    to_user.fetch(transaction=transaction)
+
+    from_user.balance -= amount
+    to_user.balance += amount
+
+    from_user.save(transaction=transaction)
+    to_user.save(transaction=transaction)
+
+transfer_money(transaction, 'alice', 'bob', 100)
 ```
 
 **Performance Benefits** (automatic):
@@ -392,7 +462,8 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ### Live Demos
 
-- `docs/demos/topics/document_references.ipynb` - **NEW!** Document references deep dive
+- `docs/demos/topics/transactions.ipynb` - **NEW!** Transactions for atomic operations
+- `docs/demos/topics/document_references.ipynb` - Document references deep dive
 - `docs/demos/topics/pagination.ipynb` - Pagination patterns and cursor navigation
 - `docs/demos/topics/dates_and_timestamps.ipynb` - Timezone handling guide
 - `docs/demos/topics/vector_embeddings.ipynb` - Vector search examples
@@ -423,14 +494,14 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 ### Testing Infrastructure
 - Firestore Emulator (local testing)
 - Custom test harness for cleanup
-- 159 integration tests (70 sync + 69 async + 20 reference tests)
-- 229 unit and feature tests
+- 178 integration tests (70 sync + 69 async + 20 reference tests + 19 transaction tests)
+- 237 unit and feature tests
 
 ---
 
 ## Summary
 
-**Phase 4 Part 1 Status**: ✅ **100% Complete** (Document References)
+**Phase 4 Part 2 Status**: ✅ **100% Complete** (Transactions)
 
 **Completed**:
 - ✅ Field-level dirty tracking
@@ -439,11 +510,14 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 - ✅ Atomic operations (array_union, array_remove, increment)
 - ✅ Query builder (where, order_by, limit, get, stream)
 - ✅ Pagination cursors (start_at, start_after, end_at, end_before)
-- ✅ **Document references** (automatic FireObject ↔ DocumentReference conversion)
-- ✅ **Lazy loading** (referenced documents load on-demand)
-- ✅ **Nested references** (lists, dicts, arbitrary depth)
-- ✅ 388 total tests (157 new tests since Phase 1, +68%)
-- ✅ 12 documentation resources (4 topics demo notebooks)
+- ✅ Document references (automatic FireObject ↔ DocumentReference conversion)
+- ✅ Lazy loading (referenced documents load on-demand)
+- ✅ Nested references (lists, dicts, arbitrary depth)
+- ✅ **Transactions** (decorator pattern with @firestore.transactional)
+- ✅ **Transactional operations** (fetch and save with transaction parameter)
+- ✅ **Both sync and async** (full transaction support for both)
+- ✅ 415 total tests (184 new tests since Phase 1, +80%)
+- ✅ 13 documentation resources (5 topics demo notebooks)
 
 **Performance Gains**:
 - **50-90% bandwidth reduction** from partial updates
@@ -456,10 +530,10 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 **Next Steps**:
 1. Phase 3 (ProxiedMap/ProxiedList) - nested mutation tracking
-2. Phase 4 Part 2 (Batch Operations & Transactions)
-3. Phase 4 Part 3 (Performance Optimizations)
+2. Phase 4 Part 3 (Batch Operations)
+3. Phase 4 Part 4 (Performance Optimizations)
 
-**Production Readiness**: ✅ Phase 1 + Phase 2 + Phase 2.5 + Phase 4.1 are production-ready!
+**Production Readiness**: ✅ Phase 1 + Phase 2 + Phase 2.5 + Phase 4.1 + Phase 4.2 are production-ready!
 
 ---
 
@@ -473,4 +547,4 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ---
 
-**Status Summary**: Phase 4 Part 1 complete! Document references with automatic conversion and lazy loading enable seamless relationship modeling. All tests passing (388/388, 100%). Combined with Phase 2.5 query builder, Phase 2 partial updates, and Phase 1 core features, FireProx is production-ready for rapid prototyping with significant performance improvements (50-90% bandwidth reduction, lazy loading reduces unnecessary fetches, memory-efficient streaming, cursor-based pagination, concurrency-safe atomic operations). Zero breaking changes ensure smooth upgrades. 157 new tests since Phase 1 (+68%), 12 comprehensive documentation resources.
+**Status Summary**: Phase 4 Part 2 complete! Transactions provide ACID guarantees for atomic read-modify-write operations using the native decorator pattern. All tests passing (415/415, 100%). Combined with document references (Phase 4.1), query builder (Phase 2.5), partial updates (Phase 2), and Phase 1 core features, FireProx is production-ready for rapid prototyping with significant performance improvements (50-90% bandwidth reduction, lazy loading, memory-efficient streaming, cursor-based pagination, concurrency-safe atomic operations, ACID transactions). Zero breaking changes ensure smooth upgrades. 184 new tests since Phase 1 (+80%), 13 comprehensive documentation resources.

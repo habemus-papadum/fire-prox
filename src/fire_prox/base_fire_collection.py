@@ -43,6 +43,36 @@ class BaseFireCollection:
         self._sync_client = sync_client
 
     # =========================================================================
+    # Transaction Support (SHARED)
+    # =========================================================================
+
+    def transaction(self) -> Any:
+        """
+        Create a transaction for atomic read-modify-write operations.
+
+        Convenience method for creating transactions directly from a collection
+        reference, eliminating the need to access the root FireProx client.
+
+        Returns:
+            A native google.cloud.firestore.Transaction or
+            google.cloud.firestore.AsyncTransaction instance.
+
+        Example:
+            users = db.collection('users')
+            transaction = users.transaction()
+
+            @firestore.transactional
+            def update_user(transaction, user_id):
+                user = users.doc(user_id)
+                user.fetch(transaction=transaction)
+                user.visits += 1
+                user.save(transaction=transaction)
+
+            update_user(transaction, 'alice')
+        """
+        return self._client.transaction()
+
+    # =========================================================================
     # Properties (SHARED)
     # =========================================================================
 

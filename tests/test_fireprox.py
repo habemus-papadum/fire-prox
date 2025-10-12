@@ -292,12 +292,15 @@ class TestFireProxBatchAndTransactions:
         with pytest.raises(NotImplementedError):
             db.batch()
 
-    def test_transaction_raises_notimplementederror(self):
-        """Test that transaction() raises NotImplementedError (Phase 2+)."""
+    def test_transaction_returns_transaction_object(self):
+        """Test that transaction() returns a transaction object."""
         mock_client = Mock(spec=FirestoreClient)
+        mock_transaction = Mock()
+        mock_client.transaction.return_value = mock_transaction
         db = FireProx(mock_client)
-        with pytest.raises(NotImplementedError):
-            db.transaction()
+        transaction = db.transaction()
+        assert transaction == mock_transaction
+        mock_client.transaction.assert_called_once()
 
 
 class TestFireProxPathValidation:

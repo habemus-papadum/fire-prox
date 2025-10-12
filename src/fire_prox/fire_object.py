@@ -143,7 +143,7 @@ class FireObject(BaseFireObject):
     # Core Lifecycle Methods (Sync-specific I/O)
     # =========================================================================
 
-    def fetch(self, force: bool = False) -> 'FireObject':
+    def fetch(self, force: bool = False, transaction: Optional[Any] = None) -> 'FireObject':
         """
         Fetch document data from Firestore (synchronous).
 
@@ -155,6 +155,8 @@ class FireObject(BaseFireObject):
             force: If True, fetch data even if already LOADED. Useful for
                   refreshing data to get latest changes from Firestore.
                   Default is False.
+            transaction: Optional transaction object for transactional reads.
+                        If provided, the read will be part of the transaction.
 
         Returns:
             Self, to allow method chaining.
@@ -169,10 +171,17 @@ class FireObject(BaseFireObject):
             LOADED -> LOADED: Refreshes data if force=True
 
         Example:
+            # Normal fetch
             user = db.doc('users/alovelace')  # ATTACHED
             user.fetch()  # Now LOADED with data
-            # ... make external changes in Firestore ...
-            user.fetch(force=True)  # Refresh data
+
+            # Transactional fetch
+            transaction = db.transaction()
+            @firestore.transactional
+            def read_user(transaction):
+                user.fetch(transaction=transaction)
+                return user.credits
+            credits = read_user(transaction)
         """
         # Validate state
         self._validate_not_detached("fetch()")
@@ -183,7 +192,11 @@ class FireObject(BaseFireObject):
             return self
 
         # Fetch from Firestore (synchronous)
-        snapshot = self._doc_ref.get()
+        # Use transaction if provided, otherwise normal get
+        if transaction is not None:
+            snapshot = self._doc_ref.get(transaction=transaction)
+        else:
+            snapshot = self._doc_ref.get()
 
         if not snapshot.exists:
             raise NotFound(f"Document {self._doc_ref.path} does not exist")
@@ -199,7 +212,7 @@ class FireObject(BaseFireObject):
 
         return self
 
-    def save(self, doc_id: Optional[str] = None) -> 'FireObject':
+    def save(self, doc_id: Optional[str] = None, transaction: Optional[Any] = None) -> 'FireObject':
         """
         Save the object's data to Firestore (synchronous).
 
@@ -210,13 +223,16 @@ class FireObject(BaseFireObject):
         Args:
             doc_id: Optional custom document ID. Only used when saving a
                    DETACHED object. If None, Firestore auto-generates an ID.
+            transaction: Optional transaction object for transactional writes.
+                        If provided, the write will be part of the transaction.
 
         Returns:
             Self, to allow method chaining.
 
         Raises:
             RuntimeError: If called on a DELETED object.
-            ValueError: If DETACHED object has no parent collection.
+            ValueError: If DETACHED object has no parent collection, or if
+                       trying to create a new document within a transaction.
 
         State Transitions:
             DETACHED -> LOADED: Creates new document with doc_id or auto-ID
@@ -231,12 +247,27 @@ class FireObject(BaseFireObject):
             # Update existing
             user.year = 1816
             user.save()  # Performs update
+
+            # Transactional save
+            transaction = db.transaction()
+            @firestore.transactional
+            def update_user(transaction):
+                user.fetch(transaction=transaction)
+                user.credits += 10
+                user.save(transaction=transaction)
+            update_user(transaction)
         """
         # Check if we're trying to save a DELETED object
         self._validate_not_deleted("save()")
 
         # Handle DETACHED state - create new document
         if self._state == State.DETACHED:
+            if transaction is not None:
+                raise ValueError(
+                    "Cannot create new documents (DETACHED -> LOADED) within a transaction. "
+                    "Create the document first, then use transactions for updates."
+                )
+
             if not self._parent_collection:
                 raise ValueError("DETACHED object has no parent collection")
 
@@ -284,8 +315,11 @@ class FireObject(BaseFireObject):
             for field, operation in self._atomic_ops.items():
                 update_dict[field] = operation
 
-            # Perform partial update
-            self._doc_ref.update(update_dict)
+            # Perform partial update with or without transaction
+            if transaction is not None:
+                transaction.update(self._doc_ref, update_dict)
+            else:
+                self._doc_ref.update(update_dict)
 
             # Clear dirty tracking
             self._mark_clean()
@@ -297,7 +331,10 @@ class FireObject(BaseFireObject):
             # Prepare data for storage (convert FireObjects back to DocumentReferences)
             storage_data = self._prepare_data_for_storage()
             # For ATTACHED, we can just do a set operation
-            self._doc_ref.set(storage_data)
+            if transaction is not None:
+                transaction.set(self._doc_ref, storage_data)
+            else:
+                self._doc_ref.set(storage_data)
             object.__setattr__(self, '_state', State.LOADED)
             self._mark_clean()
             return self
