@@ -1,8 +1,8 @@
 # FireProx Project Status
 
 **Last Updated**: 2025-10-12
-**Current Version**: 0.4.0
-**Phase**: Phase 2.5 Complete ✅ (Query Builder)
+**Current Version**: 0.5.0
+**Phase**: Phase 4 Part 1 Complete ✅ (Document References)
 
 ---
 
@@ -32,16 +32,27 @@
 - ✅ **Query Builder** - Chainable `.where().order_by().limit()` interface (Phase 2.5)
 - ✅ **Pagination Cursors** - `.start_at()`, `.start_after()`, `.end_at()`, `.end_before()` (Phase 2.5)
 
+### Phase 4 Part 1: Document References ✅ Complete
+
+- ✅ **Automatic FireObject → DocumentReference Conversion** - Assign FireObjects directly as references
+- ✅ **Automatic DocumentReference → FireObject Conversion** - References auto-hydrate to FireObjects
+- ✅ **Lazy Loading** - Referenced documents load data on first attribute access
+- ✅ **Nested References** - Support for references in lists and dictionaries
+- ✅ **Type Safety** - Prevents mixing sync/async objects, validates DETACHED state
+- ✅ **Sync Client Support for Async** - Async references use companion sync client for lazy loading
+- ✅ **Object Identity** - Same reference returns same FireObject instance (caching)
+
 ### Test Coverage
 
 | Category | Count | Status |
 |----------|-------|--------|
-| **Total Tests** | 337 | ✅ 100% passing |
+| **Total Tests** | 388 | ✅ 100% passing |
 | **Sync Integration** | 70 | ✅ |
 | **Async Integration** | 69 | ✅ |
 | **Unit Tests** | 198 | ✅ |
 | **Phase 2 Integration** | 37 | ✅ |
 | **Phase 2.5 Integration** | 69 | ✅ (includes pagination) |
+| **Phase 4 Part 1 Integration** | 20 | ✅ (document references) |
 
 ### Documentation
 
@@ -51,8 +62,13 @@
 - ✅ Phase 1 Evaluation Report (planned vs actual)
 - ✅ Phase 2 Implementation Report (23KB, comprehensive)
 - ✅ Phase 2 Demo Notebook (sync + async examples)
-- ✅ **Phase 2.5 Implementation Report** (30KB, query builder)
-- ✅ **Phase 2.5 Demo Notebook** (query builder examples)
+- ✅ Phase 2.5 Implementation Report (30KB, query builder)
+- ✅ Phase 2.5 Demo Notebook (query builder examples)
+- ✅ **Topics Demo Notebooks**:
+  - ✅ Pagination (cursor-based navigation)
+  - ✅ Dates and Timestamps (timezone handling)
+  - ✅ **Document References** (reference relationships, lazy loading)
+  - ✅ Vector Embeddings (semantic search)
 
 ---
 
@@ -111,20 +127,32 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
 
 ### Phase 4: Advanced Features
 
-**1. DocumentReference Auto-Hydration**
-   - Automatically convert Reference fields to FireObjects on fetch
-   - Auto-convert FireObject assignments to References on save
-   - Seamless document relationships
-   - Lazy loading for referenced documents
+**1. DocumentReference Auto-Hydration** ✅ **COMPLETE** (Phase 4 Part 1)
+   - ✅ Automatically convert Reference fields to FireObjects on fetch
+   - ✅ Auto-convert FireObject assignments to References on save
+   - ✅ Seamless document relationships
+   - ✅ Lazy loading for referenced documents
+   - ✅ Support for nested references (lists, dicts)
+   - ✅ Type safety (DETACHED validation, sync/async mismatch detection)
 
    Example:
    ```python
+   # Assign references
+   post.author = user  # Auto-converts to DocumentReference on save
+   post.reviewers = [user1, user2, user3]  # Lists work too!
+   post.save()
+
+   # Read back
    post = db.doc('posts/post1')
    post.fetch()
 
    # Reference field auto-hydrated to FireObject
-   author = post.author  # Returns FireObject, not DocumentReference
-   print(author.name)    # Lazy loads author data
+   author = post.author  # Returns FireObject (ATTACHED state)
+   print(author.name)    # Lazy loads author data automatically!
+
+   # Nested references work seamlessly
+   for reviewer in post.reviewers:
+       print(reviewer.name)  # Each lazy loads on demand
    ```
 
 **2. Batch Operations**
@@ -173,14 +201,14 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
 
 ## Project Health Metrics
 
-| Metric | Phase 1 | Phase 2 | Phase 2.5 | Total Change |
-|--------|---------|---------|-----------|--------------|
-| **Total Tests** | 231 | 268 | 337 | +106 (+46%) |
-| **Test Pass Rate** | 100% ✅ | 100% ✅ | 100% ✅ | Maintained |
-| **Integration Tests** | 33 | 70 | 139 | +106 (+321%) |
-| **Code Quality** | Good | Good | Excellent | ⬆️ |
-| **Documentation** | 4 docs | 6 docs | 8 docs | +4 |
-| **Performance** | Baseline | **50-90% better** | **50-90% better** | 🚀 |
+| Metric | Phase 1 | Phase 2 | Phase 2.5 | Phase 4.1 | Total Change |
+|--------|---------|---------|-----------|-----------|--------------|
+| **Total Tests** | 231 | 268 | 337 | 388 | +157 (+68%) |
+| **Test Pass Rate** | 100% ✅ | 100% ✅ | 100% ✅ | 100% ✅ | Maintained |
+| **Integration Tests** | 33 | 70 | 139 | 159 | +126 (+382%) |
+| **Code Quality** | Good | Good | Excellent | Excellent | ⬆️ |
+| **Documentation** | 4 docs | 6 docs | 8 docs | 12 docs | +8 |
+| **Performance** | Baseline | **50-90% better** | **50-90% better** | **50-90% better** | 🚀 |
 
 ### Phase 2 & 2.5 Achievements
 
@@ -193,6 +221,18 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
 - ✅ **Concurrency-safe** atomic operations eliminate race conditions
 - ✅ **Zero breaking changes** (100% backward compatible)
 - ✅ **55KB total documentation** (two comprehensive reports)
+
+### Phase 4 Part 1 Achievements
+
+- ✅ **+20 integration tests** covering all document reference scenarios
+- ✅ **Automatic reference conversion** (FireObject ↔ DocumentReference)
+- ✅ **Lazy loading** for referenced documents (works for sync and async)
+- ✅ **Nested reference support** (lists, dicts, arbitrary depth)
+- ✅ **Type safety** - prevents DETACHED references and sync/async mixing
+- ✅ **Sync client for async** - innovative solution for async lazy loading
+- ✅ **Object identity** - caching ensures same reference = same object
+- ✅ **Zero breaking changes** (100% backward compatible)
+- ✅ **Comprehensive demo notebook** (30KB, document_references.ipynb)
 
 ---
 
@@ -248,11 +288,21 @@ posts = user.collection('posts')
 post = posts.new()
 post.title = 'Hello World'
 post.save()
+
+# Document references (Phase 4 Part 1)
+author = users.doc('ada')
+post.author = author  # Assign FireObject as reference
+post.save()
+
+# Read back - references auto-hydrate
+retrieved = db.doc('posts/post1')
+retrieved.fetch()
+print(retrieved.author.name)  # Lazy loads author data automatically!
 ```
 
 ### For Existing Users (Upgrade Guide)
 
-Phase 2 and 2.5 are **100% backward compatible**. All existing code continues to work with automatic performance improvements.
+Phase 2, 2.5, and 4.1 are **100% backward compatible**. All existing code continues to work with automatic performance improvements.
 
 **What's New**:
 ```python
@@ -278,6 +328,19 @@ for user in query.get():
 # Pagination cursors
 page1 = users.order_by('birth_year').limit(10).get()
 page2 = users.order_by('birth_year').start_after({'birth_year': page1[-1].birth_year}).limit(10).get()
+
+# Document references (Phase 4 Part 1)
+post.author = user  # Assign FireObject as reference (auto-converts)
+post.reviewers = [user1, user2]  # Works in lists too!
+post.contributors = {'lead': user1, 'editor': user2}  # And dicts!
+post.save()
+
+# References auto-hydrate on read
+post = db.doc('posts/post1')
+post.fetch()
+print(post.author.name)  # Lazy loads author automatically!
+for reviewer in post.reviewers:
+    print(reviewer.name)  # Each loads on demand
 ```
 
 **Performance Benefits** (automatic):
@@ -319,8 +382,9 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ### Test Examples
 
-- `tests/test_fire_query.py` - **NEW!** Phase 2.5 sync query tests
-- `tests/test_async_fire_query.py` - **NEW!** Phase 2.5 async query tests
+- `tests/test_document_references.py` - **NEW!** Phase 4 Part 1 reference tests (20 tests)
+- `tests/test_fire_query.py` - Phase 2.5 sync query tests
+- `tests/test_async_fire_query.py` - Phase 2.5 async query tests
 - `tests/test_integration_phase2.py` - Phase 2 sync integration tests
 - `tests/test_integration_phase2_async.py` - Phase 2 async integration tests
 - `tests/test_integration_phase1.py` - Phase 1 test patterns
@@ -328,7 +392,11 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ### Live Demos
 
-- `docs/demos/phase2_5/demo.ipynb` - **NEW!** Phase 2.5 query builder demo
+- `docs/demos/topics/document_references.ipynb` - **NEW!** Document references deep dive
+- `docs/demos/topics/pagination.ipynb` - Pagination patterns and cursor navigation
+- `docs/demos/topics/dates_and_timestamps.ipynb` - Timezone handling guide
+- `docs/demos/topics/vector_embeddings.ipynb` - Vector search examples
+- `docs/demos/phase2_5/demo.ipynb` - Phase 2.5 query builder demo
 - `docs/demos/phase2/demo.ipynb` - Phase 2 feature showcase (sync & async)
 - `docs/demos/phase1/sync.ipynb` - Phase 1 sync examples
 - `docs/demos/phase1/async.ipynb` - Phase 1 async examples
@@ -355,40 +423,43 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 ### Testing Infrastructure
 - Firestore Emulator (local testing)
 - Custom test harness for cleanup
-- 139 integration tests (70 sync + 69 async)
-- 198 unit tests
+- 159 integration tests (70 sync + 69 async + 20 reference tests)
+- 229 unit and feature tests
 
 ---
 
 ## Summary
 
-**Phase 2.5 Status**: ✅ **100% Complete** (All 5 Phase 2 tasks done!)
+**Phase 4 Part 1 Status**: ✅ **100% Complete** (Document References)
 
 **Completed**:
 - ✅ Field-level dirty tracking
 - ✅ Partial updates with .update()
 - ✅ Subcollection support (.collection())
 - ✅ Atomic operations (array_union, array_remove, increment)
-- ✅ **Query builder** (where, order_by, limit, get, stream)
-- ✅ **Pagination cursors** (start_at, start_after, end_at, end_before)
-- ✅ 106 new integration tests (46% increase)
-- ✅ 55KB total documentation
-- ✅ 2 comprehensive demo notebooks
+- ✅ Query builder (where, order_by, limit, get, stream)
+- ✅ Pagination cursors (start_at, start_after, end_at, end_before)
+- ✅ **Document references** (automatic FireObject ↔ DocumentReference conversion)
+- ✅ **Lazy loading** (referenced documents load on-demand)
+- ✅ **Nested references** (lists, dicts, arbitrary depth)
+- ✅ 388 total tests (157 new tests since Phase 1, +68%)
+- ✅ 12 documentation resources (4 topics demo notebooks)
 
 **Performance Gains**:
 - **50-90% bandwidth reduction** from partial updates
 - **70% code reduction** in query operations
 - **Concurrency-safe operations** eliminate race conditions
 - **Memory-efficient streaming** for large result sets
+- **Lazy loading** reduces unnecessary fetches
 - **Lower Firestore costs** from reduced data transfer
 - **Zero breaking changes** - full backward compatibility
 
 **Next Steps**:
-1. Begin Phase 3 (ProxiedMap/ProxiedList) - ~1-2 weeks
-2. Continue documentation and examples
-3. Consider Phase 4 features (transactions, batch operations, reference hydration)
+1. Phase 3 (ProxiedMap/ProxiedList) - nested mutation tracking
+2. Phase 4 Part 2 (Batch Operations & Transactions)
+3. Phase 4 Part 3 (Performance Optimizations)
 
-**Production Readiness**: ✅ Phase 1 + Phase 2 + Phase 2.5 are production-ready!
+**Production Readiness**: ✅ Phase 1 + Phase 2 + Phase 2.5 + Phase 4.1 are production-ready!
 
 ---
 
@@ -402,4 +473,4 @@ open docs/PHASE2_5_IMPLEMENTATION_REPORT.md
 
 ---
 
-**Status Summary**: Phase 2.5 complete! All planned Phase 2 features implemented with excellent test coverage (337/337 tests passing, 100%). Query builder with full pagination support provides intuitive chainable interface with 70% code reduction. FireProx is production-ready for rapid prototyping with significant performance improvements (50-90% bandwidth reduction, memory-efficient streaming, cursor-based pagination, concurrency-safe atomic operations). Zero breaking changes ensure smooth upgrades.
+**Status Summary**: Phase 4 Part 1 complete! Document references with automatic conversion and lazy loading enable seamless relationship modeling. All tests passing (388/388, 100%). Combined with Phase 2.5 query builder, Phase 2 partial updates, and Phase 1 core features, FireProx is production-ready for rapid prototyping with significant performance improvements (50-90% bandwidth reduction, lazy loading reduces unnecessary fetches, memory-efficient streaming, cursor-based pagination, concurrency-safe atomic operations). Zero breaking changes ensure smooth upgrades. 157 new tests since Phase 1 (+68%), 12 comprehensive documentation resources.
