@@ -20,9 +20,11 @@ class AsyncFireObject(BaseFireObject):
     AsyncFireObject provides an object-oriented interface to Firestore documents
     using the async/await pattern for all I/O operations.
 
-    Note: Unlike the synchronous FireObject, AsyncFireObject does NOT support
-    lazy loading via __getattr__ (Python doesn't support async __getattr__).
-    Users must explicitly call `await obj.fetch()` before accessing attributes.
+    Lazy Loading: AsyncFireObject supports lazy loading via automatic fetch on
+    attribute access. When accessing an attribute on an ATTACHED object, it will
+    automatically fetch data from Firestore (using a synchronous thread to run
+    the async fetch). This happens once per object - subsequent accesses are
+    instant dict lookups.
 
     Usage Examples:
         # Create a new document (DETACHED state)
@@ -31,10 +33,14 @@ class AsyncFireObject(BaseFireObject):
         user.year = 1815
         await user.save()  # Transitions to LOADED
 
-        # Load existing document
+        # Load existing document with lazy loading (automatic fetch)
         user = db.doc('users/alovelace')  # ATTACHED state
-        await user.fetch()  # Explicitly fetch data
-        print(user.name)  # Now can access attributes
+        print(user.name)  # Automatically fetches data, transitions to LOADED
+
+        # Or explicitly fetch if preferred
+        user = db.doc('users/alovelace')
+        await user.fetch()  # Explicit async fetch
+        print(user.name)
 
         # Update and save
         user.year = 1816
@@ -46,10 +52,15 @@ class AsyncFireObject(BaseFireObject):
 
     def __getattr__(self, name: str) -> Any:
         """
-        Handle attribute access for document fields.
+        Handle attribute access for document fields with lazy loading.
 
-        Note: Unlike sync version, this does NOT support lazy loading.
-        Users must explicitly fetch() before accessing attributes.
+        This method implements lazy loading: if the object is in ATTACHED state,
+        accessing any data attribute will automatically trigger a synchronous fetch
+        to load the data from Firestore using a companion sync client.
+
+        This fetch happens **once per object** - after the first attribute access,
+        the object transitions to LOADED state and subsequent accesses are instant
+        dict lookups.
 
         Args:
             name: The attribute name being accessed.
@@ -58,20 +69,33 @@ class AsyncFireObject(BaseFireObject):
             The value of the field from the internal _data cache.
 
         Raises:
-            AttributeError: If accessing attributes on ATTACHED (not fetched),
-                           or if attribute doesn't exist.
+            AttributeError: If the attribute doesn't exist in _data after
+                           fetching (if necessary).
+            NotFound: If document doesn't exist in Firestore (during lazy load).
+
+        State Transitions:
+            ATTACHED -> LOADED: Automatically fetches data on first access.
+
+        Example:
+            user = db.doc('users/alovelace')  # ATTACHED
+            name = user.name  # Triggers sync fetch, transitions to LOADED
+            year = user.year  # No fetch needed, already LOADED
         """
         if name in self._INTERNAL_ATTRS:
             raise AttributeError(f"Internal attribute {name} not set")
 
-        # ATTACHED: Must fetch first (no lazy loading in async)
-        if self._state == State.ATTACHED:
-            raise AttributeError(
-                f"Cannot access attribute '{name}' on ATTACHED AsyncFireObject. "
-                f"Call await fetch() first to load data from Firestore."
-            )
+        # If we're in ATTACHED state, trigger lazy loading via sync fetch
+        if self._state == State.ATTACHED and self._sync_doc_ref:
+            # Use sync doc ref for lazy loading (synchronous fetch)
+            snapshot = self._sync_doc_ref.get()
 
-        # Check if attribute exists in _data
+            if not snapshot.exists:
+                raise NotFound(f"Document {self._sync_doc_ref.path} does not exist")
+
+            # Transition to LOADED with data
+            self._transition_to_loaded(snapshot.to_dict() or {})
+
+        # Check if attribute exists in _data (now in LOADED state)
         if name not in self._data:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

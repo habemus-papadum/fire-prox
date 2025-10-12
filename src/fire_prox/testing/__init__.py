@@ -28,42 +28,35 @@ def async_testing_client():
 DEMO_HOST = "localhost:9090"
 
 
-@contextmanager
-def temp_env(var, value):
-    """
-    A context manager to temporarily set an environment variable.
-
-    Args:
-        var (str): The name of the environment variable.
-        value (str): The temporary value for the variable.
-    """
-    # Get the original value, which could be None if it doesn't exist
-    original_value = os.getenv(var)
-
-    # Set the new value. Note: environment variables must be strings.
-    os.environ[var] = str(value)
-
-    try:
-        # Yield control to the code within the 'with' block
-        yield
-    finally:
-        # This block executes after the 'with' block, even on exceptions
-        if original_value is None:
-            # If the variable didn't exist before, remove it
-            del os.environ[var]
-        else:
-            # Otherwise, restore the original value
-            os.environ[var] = original_value
-
 def demo_client():
-    # this is safe (but annoying) based on looking a Firestore Client code
-    with temp_env('FIRESTORE_EMULATOR_HOST', DEMO_HOST):
+    """
+    Create a demo Firestore client.
+
+    If NOTEBOOK_CI environment variable is set, returns a standard testing client.
+    Otherwise, returns a client configured for the developer emulator (port 9090).
+    """
+    # In CI/test environment, use standard test client
+    if os.getenv('NOTEBOOK_CI'):
         return testing_client()
 
+    # For local development, use developer emulator with UI
+    os.environ['FIRESTORE_EMULATOR_HOST'] = DEMO_HOST
+    return testing_client()
+
 def async_demo_client():
-    # this is safe (but annoying) based on looking a Firestore Client code
-    with temp_env("FIRESTORE_EMULATOR_HOST", DEMO_HOST):
+    """
+    Create an async demo Firestore client.
+
+    If NOTEBOOK_CI environment variable is set, returns a standard async testing client.
+    Otherwise, returns a client configured for the developer emulator (port 9090).
+    """
+    # In CI/test environment, use standard async test client
+    if os.getenv('NOTEBOOK_CI'):
         return async_testing_client()
+
+    # For local development, use developer emulator with UI
+    os.environ["FIRESTORE_EMULATOR_HOST"] = DEMO_HOST
+    return async_testing_client()
 
 class FirestoreProjectCleanupError(RuntimeError):
     """Raised when the Firestore emulator project could not be deleted."""

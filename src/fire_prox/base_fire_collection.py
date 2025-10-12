@@ -26,7 +26,8 @@ class BaseFireCollection:
     def __init__(
         self,
         collection_ref: Any,  # CollectionReference or AsyncCollectionReference
-        client: Optional[Any] = None
+        client: Optional[Any] = None,
+        sync_client: Optional[Any] = None
     ):
         """
         Initialize a FireCollection.
@@ -35,9 +36,11 @@ class BaseFireCollection:
             collection_ref: The underlying CollectionReference from
                            google-cloud-firestore.
             client: Optional reference to the parent FireProx client.
+            sync_client: Optional sync Firestore client for lazy loading (async only).
         """
         self._collection_ref = collection_ref
         self._client = client
+        self._sync_client = sync_client
 
     # =========================================================================
     # Properties (SHARED)
