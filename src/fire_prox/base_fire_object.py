@@ -7,6 +7,7 @@ identical between synchronous and asynchronous FireObject implementations.
 
 from typing import Optional, Any, Dict, Set
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
+from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.vector import Vector
 from .state import State
 
@@ -298,10 +299,8 @@ class BaseFireObject:
         if not hasattr(self, '_data'):
             object.__setattr__(self, name, value)
         else:
-            # Convert FireVector to native Vector before storing
-            from .fire_vector import FireVector
-            if isinstance(value, FireVector):
-                value = value.to_firestore_vector()
+            # Convert special types for storage (FireObject → DocumentReference, FireVector → Vector, etc.)
+            value = self._convert_value_for_storage(value)
 
             # Store in _data and track in dirty fields
             self._data[name] = value
@@ -395,6 +394,21 @@ class BaseFireObject:
         self._deleted_fields.clear()
         self._atomic_ops.clear()
 
+    def _prepare_data_for_storage(self) -> Dict[str, Any]:
+        """
+        Prepare data for storage in Firestore.
+
+        Converts any FireObjects in _data back to DocumentReferences.
+        This is needed because __getattr__ may have cached FireObjects in _data.
+
+        Returns:
+            Dictionary with all values converted to Firestore-compatible types.
+        """
+        prepared = {}
+        for key, value in self._data.items():
+            prepared[key] = self._convert_value_for_storage(value)
+        return prepared
+
     def _mark_dirty(self) -> None:
         """Mark object as dirty (has unsaved changes).
 
@@ -422,11 +436,169 @@ class BaseFireObject:
         """Transition to DELETED state."""
         object.__setattr__(self, '_state', State.DELETED)
 
+    def _is_async_context(self) -> bool:
+        """
+        Determine if this FireObject is in an async context.
+
+        Returns:
+            True if this is an AsyncFireObject, False if sync FireObject.
+
+        Example:
+            if self._is_async_context():
+                # Use async patterns
+            else:
+                # Use sync patterns
+        """
+        # Check if we have a doc_ref and if it's async
+        if self._doc_ref is not None:
+            return 'Async' in self._doc_ref.__class__.__name__
+
+        # Fall back to checking the class name
+        return 'Async' in self.__class__.__name__
+
+    def _convert_value_for_storage(self, value: Any) -> Any:
+        """
+        Convert a value for storage in Firestore, handling special types.
+
+        Recursively processes values to convert:
+        - FireObject/AsyncFireObject → DocumentReference
+        - FireVector → native Vector
+        - DocumentReference → pass through (allow raw refs)
+        - Lists → recursively process items
+        - Dicts → recursively process values
+
+        Args:
+            value: The value to convert.
+
+        Returns:
+            The converted value ready for Firestore storage.
+
+        Raises:
+            ValueError: If trying to store a DETACHED FireObject.
+            TypeError: If trying to mix sync and async FireObjects.
+
+        Example:
+            # Assign a FireObject reference
+            post.author = user  # user is a FireObject
+            # Internally converts to DocumentReference
+        """
+        # Handle FireObject/AsyncFireObject → DocumentReference
+        if isinstance(value, BaseFireObject):
+            # Validate not DETACHED
+            if value._state == State.DETACHED:
+                raise ValueError(
+                    "Cannot assign a DETACHED FireObject as a reference. "
+                    "The object must be saved first to have a document path."
+                )
+
+            # Validate type compatibility (sync vs async)
+            is_async = self._is_async_context()
+            value_is_async = value._is_async_context()
+
+            if is_async != value_is_async:
+                raise TypeError(
+                    f"Cannot assign {'async' if value_is_async else 'sync'} FireObject "
+                    f"to {'async' if is_async else 'sync'} FireObject. "
+                    "Both objects must be from the same context (sync or async)."
+                )
+
+            # Convert to DocumentReference
+            return value._doc_ref
+
+        # Handle FireVector → native Vector
+        from .fire_vector import FireVector
+        if isinstance(value, FireVector):
+            return value.to_firestore_vector()
+
+        # Handle DocumentReference → pass through (allow raw refs)
+        if isinstance(value, (DocumentReference, AsyncDocumentReference)):
+            return value
+
+        # Handle lists → recursively convert items
+        if isinstance(value, list):
+            return [self._convert_value_for_storage(item) for item in value]
+
+        # Handle dicts → recursively convert values
+        if isinstance(value, dict):
+            return {k: self._convert_value_for_storage(v) for k, v in value.items()}
+
+        # Everything else passes through unchanged
+        return value
+
+    @classmethod
+    def _convert_snapshot_value_for_retrieval(
+        cls,
+        value: Any,
+        is_async: bool,
+        sync_client: Optional[Any] = None
+    ) -> Any:
+        """
+        Convert a value from Firestore snapshot for Python use.
+
+        Recursively processes values to convert:
+        - DocumentReference → FireObject/AsyncFireObject (ATTACHED state)
+        - native Vector → FireVector
+        - Lists → recursively process items
+        - Dicts → recursively process values
+
+        Args:
+            value: The value from Firestore snapshot.
+            is_async: Whether to create async or sync FireObjects.
+            sync_client: Optional sync Firestore client for async lazy loading.
+
+        Returns:
+            The converted value ready for Python use.
+
+        Example:
+            # Reading a document with a reference field
+            doc.fetch()
+            author = doc.author  # Automatically converted to FireObject
+        """
+        # Handle DocumentReference → FireObject/AsyncFireObject
+        if isinstance(value, (DocumentReference, AsyncDocumentReference)):
+            if is_async:
+                from .async_fire_object import AsyncFireObject
+                # For async, provide sync_doc_ref for lazy loading
+                sync_ref = None
+                if isinstance(value, DocumentReference):
+                    # It's already a sync ref
+                    sync_ref = value
+                elif isinstance(value, AsyncDocumentReference) and sync_client:
+                    # Create sync ref from async ref using sync_client
+                    sync_ref = sync_client.document(value.path)
+
+                return AsyncFireObject(
+                    doc_ref=value,
+                    initial_state=State.ATTACHED,
+                    sync_doc_ref=sync_ref,
+                    sync_client=sync_client
+                )
+            else:
+                from .fire_object import FireObject
+                return FireObject(doc_ref=value, initial_state=State.ATTACHED)
+
+        # Handle native Vector → FireVector
+        if isinstance(value, Vector):
+            from .fire_vector import FireVector
+            return FireVector.from_firestore_vector(value)
+
+        # Handle lists → recursively convert items
+        if isinstance(value, list):
+            return [cls._convert_snapshot_value_for_retrieval(item, is_async, sync_client) for item in value]
+
+        # Handle dicts → recursively convert values
+        if isinstance(value, dict):
+            return {k: cls._convert_snapshot_value_for_retrieval(v, is_async, sync_client) for k, v in value.items()}
+
+        # Everything else passes through unchanged
+        return value
+
     @classmethod
     def _create_from_snapshot_base(
         cls,
         snapshot: DocumentSnapshot,
-        parent_collection: Optional[Any] = None
+        parent_collection: Optional[Any] = None,
+        sync_client: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Extract data for creating FireObject from snapshot.
@@ -436,6 +608,7 @@ class BaseFireObject:
         Args:
             snapshot: DocumentSnapshot from native API.
             parent_collection: Optional parent collection reference.
+            sync_client: Optional sync Firestore client for async lazy loading.
 
         Returns:
             Dictionary with initialization parameters.
@@ -449,14 +622,13 @@ class BaseFireObject:
         # Get data from snapshot
         data = snapshot.to_dict() or {}
 
-        # Convert any native Vector objects to FireVector
-        from .fire_vector import FireVector
+        # Detect async context from snapshot reference
+        is_async = 'Async' in snapshot.reference.__class__.__name__
+
+        # Convert all values (DocumentReference → FireObject, Vector → FireVector, etc.)
         converted_data = {}
         for key, value in data.items():
-            if isinstance(value, Vector):
-                converted_data[key] = FireVector.from_firestore_vector(value)
-            else:
-                converted_data[key] = value
+            converted_data[key] = cls._convert_snapshot_value_for_retrieval(value, is_async, sync_client)
 
         return {
             'doc_ref': snapshot.reference,

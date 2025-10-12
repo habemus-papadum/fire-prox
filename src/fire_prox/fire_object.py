@@ -7,7 +7,7 @@ schemaless, state-aware proxy for Firestore documents.
 
 from typing import Any, Optional
 from google.cloud import firestore
-from google.cloud.firestore_v1.document import DocumentSnapshot
+from google.cloud.firestore_v1.document import DocumentSnapshot, DocumentReference
 from google.cloud.firestore_v1.vector import Vector
 from google.cloud.exceptions import NotFound
 from .base_fire_object import BaseFireObject
@@ -90,10 +90,50 @@ class FireObject(BaseFireObject):
         # Check if attribute exists in _data
         if name in self._data:
             value = self._data[name]
+
             # Convert native Vector to FireVector on retrieval
             if isinstance(value, Vector):
                 from .fire_vector import FireVector
-                return FireVector.from_firestore_vector(value)
+                fire_vec = FireVector.from_firestore_vector(value)
+                # Cache the converted object
+                self._data[name] = fire_vec
+                return fire_vec
+
+            # Convert DocumentReference to FireObject on retrieval
+            if isinstance(value, DocumentReference):
+                fire_obj = FireObject(doc_ref=value, initial_state=State.ATTACHED)
+                # Cache the converted object so subsequent accesses return the same instance
+                self._data[name] = fire_obj
+                return fire_obj
+
+            # Recursively convert lists containing references
+            if isinstance(value, list):
+                converted_list = [
+                    FireObject(doc_ref=item, initial_state=State.ATTACHED)
+                    if isinstance(item, DocumentReference)
+                    else item
+                    for item in value
+                ]
+                # Cache if any conversions were made
+                if any(isinstance(item, DocumentReference) for item in value):
+                    self._data[name] = converted_list
+                return converted_list
+
+            # Recursively convert dicts containing references
+            if isinstance(value, dict):
+                converted_dict = {
+                    k: (
+                        FireObject(doc_ref=v, initial_state=State.ATTACHED)
+                        if isinstance(v, DocumentReference)
+                        else v
+                    )
+                    for k, v in value.items()
+                }
+                # Cache if any conversions were made
+                if any(isinstance(v, DocumentReference) for v in value.values()):
+                    self._data[name] = converted_dict
+                return converted_dict
+
             return value
 
         # Attribute not found
@@ -148,8 +188,14 @@ class FireObject(BaseFireObject):
         if not snapshot.exists:
             raise NotFound(f"Document {self._doc_ref.path} does not exist")
 
-        # Transition to LOADED state with data
-        self._transition_to_loaded(snapshot.to_dict() or {})
+        # Get data and convert special types (DocumentReference → FireObject, Vector → FireVector, etc.)
+        data = snapshot.to_dict() or {}
+        converted_data = {}
+        for key, value in data.items():
+            converted_data[key] = self._convert_snapshot_value_for_retrieval(value, is_async=False)
+
+        # Transition to LOADED state with converted data
+        self._transition_to_loaded(converted_data)
 
         return self
 
@@ -203,8 +249,11 @@ class FireObject(BaseFireObject):
             else:
                 doc_ref = collection_ref.document()
 
+            # Prepare data for storage (convert FireObjects back to DocumentReferences)
+            storage_data = self._prepare_data_for_storage()
+
             # Save data to Firestore
-            doc_ref.set(self._data)
+            doc_ref.set(storage_data)
 
             # Update internal state
             object.__setattr__(self, '_doc_ref', doc_ref)
@@ -223,9 +272,9 @@ class FireObject(BaseFireObject):
             # Build update dict with modified fields
             update_dict = {}
 
-            # Add modified fields
+            # Add modified fields (convert to storage format)
             for field in self._dirty_fields:
-                update_dict[field] = self._data[field]
+                update_dict[field] = self._convert_value_for_storage(self._data[field])
 
             # Add deleted fields with DELETE_FIELD sentinel
             for field in self._deleted_fields:
@@ -245,8 +294,10 @@ class FireObject(BaseFireObject):
 
         # Handle ATTACHED state - set data
         if self._state == State.ATTACHED:
+            # Prepare data for storage (convert FireObjects back to DocumentReferences)
+            storage_data = self._prepare_data_for_storage()
             # For ATTACHED, we can just do a set operation
-            self._doc_ref.set(self._data)
+            self._doc_ref.set(storage_data)
             object.__setattr__(self, '_state', State.LOADED)
             self._mark_clean()
             return self

@@ -10,7 +10,7 @@ from typing import Any, Optional
 from google.cloud import firestore
 from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
-from google.cloud.firestore_v1.document import DocumentSnapshot
+from google.cloud.firestore_v1.document import DocumentSnapshot, DocumentReference
 from google.cloud.firestore_v1.vector import Vector
 
 from .base_fire_object import BaseFireObject
@@ -96,18 +96,51 @@ class AsyncFireObject(BaseFireObject):
             if not snapshot.exists:
                 raise NotFound(f"Document {self._sync_doc_ref.path} does not exist")
 
-            # Transition to LOADED with data
-            self._transition_to_loaded(snapshot.to_dict() or {})
+            # Get data and convert special types (DocumentReference → FireObject, Vector → FireVector, etc.)
+            data = snapshot.to_dict() or {}
+            converted_data = {}
+            sync_client = self._sync_doc_ref._client if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref else None
+            for key, value in data.items():
+                converted_data[key] = self._convert_snapshot_value_for_retrieval(value, is_async=True, sync_client=sync_client)
+
+            # Transition to LOADED with converted data
+            self._transition_to_loaded(converted_data)
 
         # Check if attribute exists in _data (now in LOADED state)
         if name not in self._data:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
         value = self._data[name]
+
         # Convert native Vector to FireVector on retrieval
         if isinstance(value, Vector):
             from .fire_vector import FireVector
-            return FireVector.from_firestore_vector(value)
+            fire_vec = FireVector.from_firestore_vector(value)
+            # Cache the converted object
+            self._data[name] = fire_vec
+            return fire_vec
+
+        # Convert DocumentReference to AsyncFireObject on retrieval
+        if isinstance(value, (DocumentReference, AsyncDocumentReference)):
+            # Return async version with sync_doc_ref for lazy loading
+            sync_ref = None
+            if isinstance(value, DocumentReference):
+                sync_ref = value
+            elif isinstance(value, AsyncDocumentReference) and hasattr(self, '_sync_doc_ref') and self._sync_doc_ref:
+                # Create sync ref from async ref using sync_client
+                sync_client = self._sync_doc_ref._client
+                sync_ref = sync_client.document(value.path)
+
+            async_obj = AsyncFireObject(
+                doc_ref=value,
+                initial_state=State.ATTACHED,
+                sync_doc_ref=sync_ref,
+                sync_client=self._sync_doc_ref._client if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref else None
+            )
+            # Cache the converted object so subsequent accesses return the same instance
+            self._data[name] = async_obj
+            return async_obj
+
         return value
 
     # =========================================================================
@@ -151,8 +184,15 @@ class AsyncFireObject(BaseFireObject):
         if not snapshot.exists:
             raise NotFound(f"Document {self._doc_ref.path} does not exist")
 
-        # Transition to LOADED with data
-        self._transition_to_loaded(snapshot.to_dict() or {})
+        # Get data and convert special types (DocumentReference → FireObject, Vector → FireVector, etc.)
+        data = snapshot.to_dict() or {}
+        converted_data = {}
+        sync_client = self._sync_doc_ref._client if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref else None
+        for key, value in data.items():
+            converted_data[key] = self._convert_snapshot_value_for_retrieval(value, is_async=True, sync_client=sync_client)
+
+        # Transition to LOADED with converted data
+        self._transition_to_loaded(converted_data)
 
         return self
 
@@ -194,8 +234,11 @@ class AsyncFireObject(BaseFireObject):
             else:
                 doc_ref = collection_ref.document()
 
+            # Prepare data for storage (convert FireObjects back to DocumentReferences)
+            storage_data = self._prepare_data_for_storage()
+
             # Async save
-            await doc_ref.set(self._data)
+            await doc_ref.set(storage_data)
 
             # Update state
             object.__setattr__(self, '_doc_ref', doc_ref)
@@ -210,9 +253,9 @@ class AsyncFireObject(BaseFireObject):
                 # Build update dict with modified and deleted fields
                 update_dict = {}
 
-                # Add modified fields
+                # Add modified fields (convert to storage format)
                 for field in self._dirty_fields:
-                    update_dict[field] = self._data[field]
+                    update_dict[field] = self._convert_value_for_storage(self._data[field])
 
                 # Add deleted fields with DELETE_FIELD sentinel
                 for field in self._deleted_fields:
@@ -226,7 +269,9 @@ class AsyncFireObject(BaseFireObject):
                 await self._doc_ref.update(update_dict)
             else:
                 # ATTACHED state: use .set() for full overwrite
-                await self._doc_ref.set(self._data)
+                # Prepare data for storage (convert FireObjects back to DocumentReferences)
+                storage_data = self._prepare_data_for_storage()
+                await self._doc_ref.set(storage_data)
 
             self._mark_clean()
 
@@ -268,7 +313,8 @@ class AsyncFireObject(BaseFireObject):
     def from_snapshot(
         cls,
         snapshot: DocumentSnapshot,
-        parent_collection: Optional[Any] = None
+        parent_collection: Optional[Any] = None,
+        sync_client: Optional[Any] = None
     ) -> 'AsyncFireObject':
         """
         Create an AsyncFireObject from a DocumentSnapshot.
@@ -276,6 +322,7 @@ class AsyncFireObject(BaseFireObject):
         Args:
             snapshot: DocumentSnapshot from native async API.
             parent_collection: Optional parent collection reference.
+            sync_client: Optional sync Firestore client for async lazy loading.
 
         Returns:
             AsyncFireObject in LOADED state.
@@ -287,12 +334,13 @@ class AsyncFireObject(BaseFireObject):
             async for doc in query.stream():
                 user = AsyncFireObject.from_snapshot(doc)
         """
-        init_data = cls._create_from_snapshot_base(snapshot, parent_collection)
+        init_data = cls._create_from_snapshot_base(snapshot, parent_collection, sync_client)
 
         obj = cls(
             doc_ref=init_data['doc_ref'],
             initial_state=init_data['initial_state'],
-            parent_collection=init_data['parent_collection']
+            parent_collection=init_data['parent_collection'],
+            sync_client=sync_client
         )
 
         object.__setattr__(obj, '_data', init_data['data'])
