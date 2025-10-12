@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/fire_prox/async_fire_query.py: 92.59%</title>
+    <title>Coverage for src/fire_prox/async_fire_query.py: 91.57%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
     <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
     <script src="coverage_html_cb_6fb7b396.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src/fire_prox/async_fire_query.py</b>:
-            <span class="pc_cov">92.59%</span>
+            <span class="pc_cov">91.57%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -54,9 +54,9 @@
             </div>
         </aside>
         <h2>
-            <span class="text">81 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">75<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">6<span class="text"> missing</span></button>
+            <span class="text">83 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">76<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">7<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">3<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_92ccb17935fec186_async_fireprox_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.10.7">coverage.py v7.10.7</a>,
-            created at 2025-10-12 19:48 +0000
+            created at 2025-10-12 20:58 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -585,13 +585,73 @@
     <p class="run"><span class="n"><a id="t503" href="#t503">503</a></span><span class="t">            <span class="key">async</span> <span class="key">for</span> <span class="nam">snapshot</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_query</span><span class="op">.</span><span class="nam">stream</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t504" href="#t504">504</a></span><span class="t">                <span class="key">yield</span> <span class="nam">AsyncFireObject</span><span class="op">.</span><span class="nam">from_snapshot</span><span class="op">(</span><span class="nam">snapshot</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_parent_collection</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t505" href="#t505">505</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="exc show_exc"><span class="n"><a id="t506" href="#t506">506</a></span><span class="t">    <span class="key">def</span> <span class="nam">__repr__</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="exc show_exc"><span class="n"><a id="t507" href="#t507">507</a></span><span class="t">        <span class="str">"""Return string representation of the query."""</span>&nbsp;</span><span class="r"></span></p>
-    <p class="exc show_exc"><span class="n"><a id="t508" href="#t508">508</a></span><span class="t">        <span class="key">return</span> <span class="fst">f"</span><span class="fst">&lt;AsyncFireQuery query=</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_query</span><span class="op">}</span><span class="fst">></span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t506" href="#t506">506</a></span><span class="t">    <span class="com"># =========================================================================</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t507" href="#t507">507</a></span><span class="t">    <span class="com"># Real-Time Listeners (Sync-only via sync_client)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t508" href="#t508">508</a></span><span class="t">    <span class="com"># =========================================================================</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t509" href="#t509">509</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t510" href="#t510">510</a></span><span class="t">    <span class="key">def</span> <span class="nam">__str__</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t511" href="#t511">511</a></span><span class="t">        <span class="str">"""Return human-readable string representation."""</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t512" href="#t512">512</a></span><span class="t">        <span class="key">return</span> <span class="fst">f"</span><span class="fst">AsyncFireQuery(</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_query</span><span class="op">}</span><span class="fst">)</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t510" href="#t510">510</a></span><span class="t">    <span class="key">def</span> <span class="nam">on_snapshot</span><span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">callback</span><span class="op">:</span> <span class="nam">Any</span><span class="op">)</span> <span class="op">-></span> <span class="nam">Any</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t511" href="#t511">511</a></span><span class="t">        <span class="str">"""</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t512" href="#t512">512</a></span><span class="t"><span class="str">        Listen for real-time updates to this query.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t513" href="#t513">513</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t514" href="#t514">514</a></span><span class="t"><span class="str">        This method sets up a real-time listener that fires the callback</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t515" href="#t515">515</a></span><span class="t"><span class="str">        whenever any document matching the query changes. The listener runs</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t516" href="#t516">516</a></span><span class="t"><span class="str">        on a separate thread managed by the Firestore SDK.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t517" href="#t517">517</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t518" href="#t518">518</a></span><span class="t"><span class="str">        **Important**: This is a sync-only feature. Even for AsyncFireQuery,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t519" href="#t519">519</a></span><span class="t"><span class="str">        the listener uses a synchronous query (via the parent collection's</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t520" href="#t520">520</a></span><span class="t"><span class="str">        _sync_client) to run on a background thread. This is the standard</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t521" href="#t521">521</a></span><span class="t"><span class="str">        Firestore pattern for real-time listeners in Python.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t522" href="#t522">522</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t523" href="#t523">523</a></span><span class="t"><span class="str">        Args:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t524" href="#t524">524</a></span><span class="t"><span class="str">            callback: Callback function invoked on query changes.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t525" href="#t525">525</a></span><span class="t"><span class="str">                     Signature: callback(query_snapshot, changes, read_time)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t526" href="#t526">526</a></span><span class="t"><span class="str">                     - query_snapshot: List of DocumentSnapshot objects matching the query</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t527" href="#t527">527</a></span><span class="t"><span class="str">                     - changes: List of DocumentChange objects (ADDED, MODIFIED, REMOVED)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t528" href="#t528">528</a></span><span class="t"><span class="str">                     - read_time: Timestamp of the snapshot</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t529" href="#t529">529</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t530" href="#t530">530</a></span><span class="t"><span class="str">        Returns:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t531" href="#t531">531</a></span><span class="t"><span class="str">            Watch object with an `.unsubscribe()` method to stop listening.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t532" href="#t532">532</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t533" href="#t533">533</a></span><span class="t"><span class="str">        Example:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t534" href="#t534">534</a></span><span class="t"><span class="str">            import threading</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t535" href="#t535">535</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t536" href="#t536">536</a></span><span class="t"><span class="str">            callback_done = threading.Event()</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t537" href="#t537">537</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t538" href="#t538">538</a></span><span class="t"><span class="str">            def on_change(query_snapshot, changes, read_time):</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t539" href="#t539">539</a></span><span class="t"><span class="str">                for change in changes:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t540" href="#t540">540</a></span><span class="t"><span class="str">                    if change.type.name == 'ADDED':</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t541" href="#t541">541</a></span><span class="t"><span class="str">                        print(f"New: {change.document.id}")</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t542" href="#t542">542</a></span><span class="t"><span class="str">                    elif change.type.name == 'MODIFIED':</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t543" href="#t543">543</a></span><span class="t"><span class="str">                        print(f"Modified: {change.document.id}")</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t544" href="#t544">544</a></span><span class="t"><span class="str">                    elif change.type.name == 'REMOVED':</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t545" href="#t545">545</a></span><span class="t"><span class="str">                        print(f"Removed: {change.document.id}")</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t546" href="#t546">546</a></span><span class="t"><span class="str">                callback_done.set()</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t547" href="#t547">547</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t548" href="#t548">548</a></span><span class="t"><span class="str">            # Listen to active users only (async query)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t549" href="#t549">549</a></span><span class="t"><span class="str">            active_users = users.where('status', '==', 'active')</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t550" href="#t550">550</a></span><span class="t"><span class="str">            watch = active_users.on_snapshot(on_change)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t551" href="#t551">551</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t552" href="#t552">552</a></span><span class="t"><span class="str">            # Wait for initial snapshot</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t553" href="#t553">553</a></span><span class="t"><span class="str">            callback_done.wait()</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t554" href="#t554">554</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t555" href="#t555">555</a></span><span class="t"><span class="str">            # Later: stop listening</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t556" href="#t556">556</a></span><span class="t"><span class="str">            watch.unsubscribe()</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t557" href="#t557">557</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t558" href="#t558">558</a></span><span class="t"><span class="str">        Note:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t559" href="#t559">559</a></span><span class="t"><span class="str">            The callback runs on a separate thread. Use threading primitives</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t560" href="#t560">560</a></span><span class="t"><span class="str">            (Event, Lock, Queue) for synchronization with your main thread.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t561" href="#t561">561</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t562" href="#t562">562</a></span><span class="t">        <span class="com"># Use the native async query's on_snapshot method</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t563" href="#t563">563</a></span><span class="t">        <span class="com"># The Firestore SDK handles the threading internally</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t564" href="#t564">564</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_query</span><span class="op">.</span><span class="nam">on_snapshot</span><span class="op">(</span><span class="nam">callback</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t565" href="#t565">565</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t566" href="#t566">566</a></span><span class="t">    <span class="key">def</span> <span class="nam">__repr__</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t567" href="#t567">567</a></span><span class="t">        <span class="str">"""Return string representation of the query."""</span>&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t568" href="#t568">568</a></span><span class="t">        <span class="key">return</span> <span class="fst">f"</span><span class="fst">&lt;AsyncFireQuery query=</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_query</span><span class="op">}</span><span class="fst">></span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t569" href="#t569">569</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t570" href="#t570">570</a></span><span class="t">    <span class="key">def</span> <span class="nam">__str__</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t571" href="#t571">571</a></span><span class="t">        <span class="str">"""Return human-readable string representation."""</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t572" href="#t572">572</a></span><span class="t">        <span class="key">return</span> <span class="fst">f"</span><span class="fst">AsyncFireQuery(</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_query</span><span class="op">}</span><span class="fst">)</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -601,7 +661,7 @@
             <a class="nav" href="z_92ccb17935fec186_async_fireprox_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.10.7">coverage.py v7.10.7</a>,
-            created at 2025-10-12 19:48 +0000
+            created at 2025-10-12 20:58 +0000
         </p>
     </div>
 </footer>
