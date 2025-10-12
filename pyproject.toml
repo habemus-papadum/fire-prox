@@ -45,6 +45,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["src/fire_prox"]
+relative_files = true
 omit = [
     "*/tests/*",
     "*/testing.py",
