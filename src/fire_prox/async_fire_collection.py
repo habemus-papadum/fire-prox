@@ -204,6 +204,33 @@ class AsyncFireCollection(BaseFireCollection):
         native_query = self._collection_ref.limit(count)
         return AsyncFireQuery(native_query, parent_collection=self)
 
+    def select(self, *field_paths: str) -> 'AsyncFireQuery':
+        """
+        Create a query with field projection.
+
+        Phase 4 Part 3 feature. Selects specific fields to return in query results.
+        Returns vanilla dictionaries instead of AsyncFireObject instances.
+
+        Args:
+            *field_paths: One or more field paths to select.
+
+        Returns:
+            An AsyncFireQuery instance with projection applied.
+
+        Example:
+            # Select specific fields
+            results = await users.select('name', 'email').get()
+            # Returns: [{'name': 'Alice', 'email': 'alice@example.com'}, ...]
+        """
+        from .async_fire_query import AsyncFireQuery
+
+        if not field_paths:
+            raise ValueError("select() requires at least one field path")
+
+        # Create query with projection
+        native_query = self._collection_ref.select(list(field_paths))
+        return AsyncFireQuery(native_query, parent_collection=self, projection=field_paths)
+
     async def get_all(self) -> AsyncIterator[AsyncFireObject]:
         """
         Retrieve all documents in the collection.

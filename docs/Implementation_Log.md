@@ -4,3 +4,8 @@
     - [First attempt](PHASE1_IMPLEMENTATION_SUMMARY.md): AI generated summary of what it did
     - [Revision 1.1](PHASE1_1_IMPLEMENTATION_REPORT.md): Revisions after getting some feedback clearing up some miscommunication. 
     - [Evaluation](phase1_evaluation_report.md):  AI reflects on what was asked for and what was actually done. 
+  - Phase 2 
+    - [Phase 2, Part 1](PHASE2_IMPLEMENTATION_REPORT.md)
+    - [Phase 2, Part 2](PHASE2_5_IMPLEMENTATION_REPORT.md)
+  - Topics
+    - [Projections](PROJECTIONS_IMPLEMENTATION_REPORT.md)
