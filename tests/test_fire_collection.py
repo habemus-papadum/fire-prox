@@ -277,33 +277,60 @@ class TestFireCollectionQueryMethods:
         assert hasattr(collection, 'get_all')
         assert callable(collection.get_all)
 
-    def test_where_raises_notimplementederror(self):
-        """Test that where() raises NotImplementedError (Phase 2)."""
+    def test_where_returns_firequery(self):
+        """Test that where() returns a FireQuery instance (Phase 2.5)."""
+        from fire_prox.fire_query import FireQuery
         mock_collection_ref = Mock(spec=CollectionReference)
-        collection = FireCollection(mock_collection_ref)
-        with pytest.raises(NotImplementedError):
-            collection.where('field', '==', 'value')
+        mock_query = Mock()
+        mock_collection_ref.where.return_value = mock_query
 
-    def test_order_by_raises_notimplementederror(self):
-        """Test that order_by() raises NotImplementedError (Phase 2)."""
-        mock_collection_ref = Mock(spec=CollectionReference)
         collection = FireCollection(mock_collection_ref)
-        with pytest.raises(NotImplementedError):
-            collection.order_by('field')
+        result = collection.where('field', '==', 'value')
 
-    def test_limit_raises_notimplementederror(self):
-        """Test that limit() raises NotImplementedError (Phase 2)."""
-        mock_collection_ref = Mock(spec=CollectionReference)
-        collection = FireCollection(mock_collection_ref)
-        with pytest.raises(NotImplementedError):
-            collection.limit(10)
+        assert isinstance(result, FireQuery)
 
-    def test_get_all_raises_notimplementederror(self):
-        """Test that get_all() raises NotImplementedError (Phase 2)."""
+    def test_order_by_returns_firequery(self):
+        """Test that order_by() returns a FireQuery instance (Phase 2.5)."""
+        from fire_prox.fire_query import FireQuery
         mock_collection_ref = Mock(spec=CollectionReference)
+        mock_query = Mock()
+        mock_collection_ref.order_by.return_value = mock_query
+
         collection = FireCollection(mock_collection_ref)
-        with pytest.raises(NotImplementedError):
-            collection.get_all()
+        result = collection.order_by('field')
+
+        assert isinstance(result, FireQuery)
+
+    def test_limit_returns_firequery(self):
+        """Test that limit() returns a FireQuery instance (Phase 2.5)."""
+        from fire_prox.fire_query import FireQuery
+        mock_collection_ref = Mock(spec=CollectionReference)
+        mock_query = Mock()
+        mock_collection_ref.limit.return_value = mock_query
+
+        collection = FireCollection(mock_collection_ref)
+        result = collection.limit(10)
+
+        assert isinstance(result, FireQuery)
+
+    def test_get_all_returns_iterator(self):
+        """Test that get_all() returns an iterator (Phase 2.5)."""
+        mock_collection_ref = Mock(spec=CollectionReference)
+        mock_snapshot = Mock()
+        mock_snapshot.reference = Mock()
+        mock_snapshot.exists = True
+        mock_snapshot.to_dict.return_value = {'name': 'Test'}
+        mock_collection_ref.stream.return_value = iter([mock_snapshot])
+
+        collection = FireCollection(mock_collection_ref)
+        result = collection.get_all()
+
+        # Should be an iterator/generator
+        assert hasattr(result, '__iter__')
+        # Verify it yields FireObjects
+        from fire_prox.fire_object import FireObject
+        first_item = next(result)
+        assert isinstance(first_item, FireObject)
 
 
 class TestFireCollectionSpecialMethods:
