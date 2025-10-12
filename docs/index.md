@@ -16,11 +16,24 @@ Fire-Prox is a schemaless, state-aware proxy library for Google Cloud Firestore 
 ----------------
 
 ## Use Cases
-Firestore serves as a powerful primitive for distributed applications. Fire-Prox aims to make Firestore convenient for developing for research workflows.  Examples of applications that Fire-Prox is designed to be useful in are:
-- Applications like Alpha Evolve involve a large swarm of AI agents trying to optimize a -specific problem, but that coordinate loosely through a database of successful ideas. 
-- Long-running agent flows, think Claude Code, that implement a complicated plan in a step-by-step fashion. 
+Firestore serves as a powerful primitive for distributed applications. Fire-Prox makes Firestore convenient for research workflows and rapid prototyping. Example applications where Fire-Prox excels:
 
-In both of the examples above, not only do AI agents need a place to write things down, but you also want a system that can let you see what's going on as it's happening, both at a macro scale and also to be able to drill down into hero mode to see exactly what a specific execution thread is doing. Then, also to be able to analyze post hoc to see again in aggregate and in low-level detail so that you can further optimize the system.
+- **Multi-agent systems** like Alpha Evolve, where large swarms of AI agents optimize specific problems while coordinating loosely through a shared database of successful ideas
+- **Long-running agent workflows** (such as Claude Code) that implement complex plans in a step-by-step fashion
 
-Firestore provides such a framework, in particular, given its both Python backend and also the nature of its JavaScript client-side backend. On the client's side, you can have pretty simple to develop web apps that don't need that they can on the one hand use authenticated workloads that don't need a special authentication server or authentication infrastructure. They can just kind of piggyback off of what Firestore provides. And this library tries to revive what seems to be missing, which is a way to quickly interrogate a Firestore database, try to figure out what was going on. Have ad hoc, like create simple throwaway tools that maybe convert data to a data frame, et cetera. So that you have the shims and harnesses you need to build a complicated application, build and test that complicated application. 
+In both scenarios, AI agents need persistent storage, but you also need observability: the ability to monitor what's happening in real-time at both macro and micro scales, drill down into specific execution threads, and analyze results post-hoc in aggregate and granular detail to optimize the system.
+
+Firestore provides an ideal framework for this, offering both Python and JavaScript clients. On the client side, you can build web applications that leverage Firestore's built-in authentication without requiring separate authentication infrastructure. Fire-Prox fills the missing piece: making it easy to quickly interrogate your Firestore database, create ad-hoc analysis tools, convert data to DataFrames, and build the shims and harnesses needed to develop and test complex distributed applications. 
+
+## Features
+**TODO**: Add a comprehensive list of supported features, highlighting feature parity with the native Firestore client. Include links to demos, and provide code snippets demonstrating how each feature works. 
+
+## Why AI?
+`fire-prox` has been almost entirely written by AI agents. The development process involves dictating prompts and having AI agents handle implementation, testing, and documentation.
+
+The workflow typically begins with creating an architecture document. For this project, I consulted multiple leading AI systems—Gemini, GPT, and Claude—to evaluate different architectural approaches before selecting the most promising design. From there, AI agents implement features incrementally, following the architectural blueprint.
+
+This approach has proven remarkably effective. AI-assisted development enables consistent quality throughout the project by eliminating the natural fatigue that comes with extensive coding sessions. Rather than managing implementation details, I focus on architecture, design decisions, and quality oversight. The result is comprehensive test coverage, detailed documentation, and cleaner code than would typically emerge from a rushed implementation.
+
+More broadly, this project serves as an exploration of AI-assisted software development. The tools have matured to where they can handle complex, multi-phase projects with proper scaffolding—good test infrastructure, clear architecture documents, and iterative validation. The development velocity is substantial, but more importantly, the consistency of output quality remains high across all phases. For prototyping and research tools where iteration speed matters, AI-assisted development offers a compelling approach worth exploring. 
 
