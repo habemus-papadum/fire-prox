@@ -28,7 +28,7 @@ uv add <package>
 (add `--dev` for dev depedencies)
 
 ### Testing
-Places unit test files in the `src` directory near the code it is testing with a descriptive name of the form `test_*.py`
+Places unit test files in the `tests` directory near with a descriptive name of the form `test_*.py`
 
 ```bash
 # Run all tests (launches Firebase emulators automatically)

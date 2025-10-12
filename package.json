@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "./test.sh"
+    "test": "./test.sh",
+    "developer-emulator": "firebase emulators:start --config firebase.developer.json"
   },
   "keywords": [],
   "author": "",
