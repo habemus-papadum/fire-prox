@@ -36,6 +36,7 @@ dev = [
     "mkdocs-material>=9.6.21",
     "jupyter>=1.1.1",
     "mkdocs-jupyter>=0.25.1",
+    "python-dotenv>=1.1.1",
 ]
 
 [tool.pytest.ini_options]

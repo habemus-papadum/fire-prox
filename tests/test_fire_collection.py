@@ -201,6 +201,7 @@ class TestFireCollectionProperties:
     def test_path_property_exists(self):
         """Test that FireCollection has path property."""
         mock_collection_ref = Mock(spec=CollectionReference)
+        mock_collection_ref._path = ('users',)
         collection = FireCollection(mock_collection_ref)
         assert hasattr(collection, 'path')
 
@@ -208,7 +209,9 @@ class TestFireCollectionProperties:
         """Test that FireCollection has parent property."""
         mock_collection_ref = Mock(spec=CollectionReference)
         collection = FireCollection(mock_collection_ref)
-        assert hasattr(collection, 'parent')
+        # parent property raises NotImplementedError in Phase 1
+        # Just check it exists on the class
+        assert hasattr(type(collection), 'parent')
 
     def test_id_returns_collection_id(self):
         """Test that id property returns collection ID from reference."""
@@ -309,6 +312,7 @@ class TestFireCollectionSpecialMethods:
     def test_repr_method_exists(self):
         """Test that FireCollection has __repr__ method."""
         mock_collection_ref = Mock(spec=CollectionReference)
+        mock_collection_ref._path = ('users',)
         collection = FireCollection(mock_collection_ref)
         assert hasattr(collection, '__repr__')
         result = repr(collection)
@@ -317,6 +321,7 @@ class TestFireCollectionSpecialMethods:
     def test_str_method_exists(self):
         """Test that FireCollection has __str__ method."""
         mock_collection_ref = Mock(spec=CollectionReference)
+        mock_collection_ref._path = ('users',)
         collection = FireCollection(mock_collection_ref)
         assert hasattr(collection, '__str__')
         result = str(collection)
