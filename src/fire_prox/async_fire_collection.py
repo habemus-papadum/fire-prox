@@ -204,6 +204,32 @@ class AsyncFireCollection(BaseFireCollection):
         native_query = self._collection_ref.limit(count)
         return AsyncFireQuery(native_query, parent_collection=self)
 
+    def select(self, *field_paths: Any) -> 'AsyncFireQuery':
+        """
+        Project async query results to only the specified fields.
+
+        Returns an :class:`AsyncFireQuery` configured to yield dictionaries when
+        executed. Document references in the projected data are converted to
+        AsyncFireObject instances automatically.
+
+        Args:
+            *field_paths: Fields to include in the projection. Accepts either
+                positional arguments or a single iterable of field paths.
+
+        Returns:
+            An AsyncFireQuery instance with the projection applied.
+        """
+
+        from .async_fire_query import AsyncFireQuery
+
+        normalized = AsyncFireQuery._normalize_field_paths(field_paths)
+        native_query = self._collection_ref.select(list(normalized))
+        return AsyncFireQuery(
+            native_query,
+            parent_collection=self,
+            projection=normalized,
+        )
+
     async def get_all(self) -> AsyncIterator[AsyncFireObject]:
         """
         Retrieve all documents in the collection.

@@ -211,6 +211,29 @@ class FireCollection(BaseFireCollection):
         native_query = self._collection_ref.limit(count)
         return FireQuery(native_query, parent_collection=self)
 
+    def select(self, *field_paths: Any) -> 'FireQuery':
+        """
+        Project query results to only the specified fields.
+
+        Returns a :class:`FireQuery` configured with Firestore's projection
+        support. When executed, the query yields dictionaries containing the
+        requested fields with document references converted into FireObject
+        instances.
+
+        Args:
+            *field_paths: Fields to include in the projection. Accepts either
+                positional arguments or a single iterable of field paths.
+
+        Returns:
+            A FireQuery instance with the projection applied.
+        """
+
+        from .fire_query import FireQuery
+
+        normalized = FireQuery._normalize_field_paths(field_paths)
+        native_query = self._collection_ref.select(list(normalized))
+        return FireQuery(native_query, parent_collection=self, projection=normalized)
+
     def get_all(self) -> Iterator[FireObject]:
         """
         Retrieve all documents in the collection.

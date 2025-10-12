@@ -32,6 +32,7 @@
 - ✅ **Mutual Exclusivity** - Clean separation between vanilla and atomic operations per field
 - ✅ **Query Builder** - Chainable `.where().order_by().limit()` interface (Phase 2.5)
 - ✅ **Pagination Cursors** - `.start_at()`, `.start_after()`, `.end_at()`, `.end_before()` (Phase 2.5)
+- ✅ **Field Projection** - `.select()` projections for get/stream/get_all (Phase 2.6)
 
 ### Phase 4 Part 1: Document References ✅ Complete
 
@@ -47,12 +48,12 @@
 
 | Category | Count | Status |
 |----------|-------|--------|
-| **Total Tests** | 388 | ✅ 100% passing |
-| **Sync Integration** | 70 | ✅ |
-| **Async Integration** | 69 | ✅ |
+| **Total Tests** | 394 | ✅ 100% passing |
+| **Sync Integration** | 73 | ✅ |
+| **Async Integration** | 72 | ✅ |
 | **Unit Tests** | 198 | ✅ |
 | **Phase 2 Integration** | 37 | ✅ |
-| **Phase 2.5 Integration** | 69 | ✅ (includes pagination) |
+| **Phase 2.5 Integration** | 72 | ✅ (includes pagination & projection) |
 | **Phase 4 Part 1 Integration** | 20 | ✅ (document references) |
 
 ### Documentation
@@ -65,11 +66,13 @@
 - ✅ Phase 2 Demo Notebook (sync + async examples)
 - ✅ Phase 2.5 Implementation Report (30KB, query builder)
 - ✅ Phase 2.5 Demo Notebook (query builder examples)
+- ✅ Phase 2.6 Implementation Report (field projection)
 - ✅ **Topics Demo Notebooks**:
   - ✅ Pagination (cursor-based navigation)
   - ✅ Dates and Timestamps (timezone handling)
   - ✅ **Document References** (reference relationships, lazy loading)
   - ✅ Vector Embeddings (semantic search)
+  - ✅ Select Projections (field projection examples)
 
 ---
 

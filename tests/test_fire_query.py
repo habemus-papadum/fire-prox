@@ -7,7 +7,7 @@ the Firestore emulator.
 
 import pytest
 from src.fire_prox.testing import testing_client
-from src.fire_prox import FireProx
+from src.fire_prox import FireProx, FireObject
 
 
 @pytest.fixture
@@ -501,3 +501,59 @@ class TestQueryPagination:
         assert len(page2_results) == 2
         assert page2_results[0].birth_year == 1903  # John
         assert page2_results[1].birth_year == 1815  # Ada
+
+
+class TestSelectProjection:
+    """Test projecting query results with select()."""
+
+    def _seed_projection_docs(self, collection):
+        mentor = collection.new()
+        mentor.name = 'Mentor'
+        mentor.skill = 'Coaching'
+        mentor.save(doc_id='mentor')
+
+        student = collection.new()
+        student.name = 'Student'
+        student.mentor = mentor
+        student.skill = 'Learning'
+        student.save(doc_id='student')
+
+    def test_select_get_returns_dicts(self, db):
+        """select() should project fields and convert references for get()."""
+        collection = db.collection('select_projection_sync_get')
+        self._seed_projection_docs(collection)
+
+        query = collection.where('name', '==', 'Student').select('name', 'mentor')
+        results = query.get()
+
+        assert len(results) == 1
+        projected = results[0]
+        assert isinstance(projected, dict)
+        assert set(projected.keys()) == {'name', 'mentor'}
+        assert projected['name'] == 'Student'
+        assert isinstance(projected['mentor'], FireObject)
+        assert projected['mentor'].path.endswith('mentor')
+
+    def test_select_stream_returns_dicts(self, db):
+        """select() should project fields for stream()."""
+        collection = db.collection('select_projection_sync_stream')
+        self._seed_projection_docs(collection)
+
+        query = collection.where('skill', '==', 'Learning').select(['name'])
+        streamed = list(query.stream())
+
+        assert len(streamed) == 1
+        assert isinstance(streamed[0], dict)
+        assert streamed[0] == {'name': 'Student'}
+
+    def test_select_get_all_iterator(self, db):
+        """select() should work with get_all() iterator."""
+        collection = db.collection('select_projection_sync_get_all')
+        self._seed_projection_docs(collection)
+
+        iterator = collection.select('name').get_all()
+        projected = list(iterator)
+
+        assert all(isinstance(item, dict) for item in projected)
+        names = {item['name'] for item in projected}
+        assert names == {'Mentor', 'Student'}

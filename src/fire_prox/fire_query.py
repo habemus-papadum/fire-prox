@@ -6,10 +6,12 @@ Firestore Query objects and provides a chainable interface for building and
 executing queries.
 """
 
-from typing import List, Iterator, Any, Optional
+from collections.abc import Iterable
+from typing import List, Iterator, Any, Optional, Tuple, Dict, Union
 from google.cloud.firestore_v1.query import Query
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .fire_object import FireObject
+from .base_fire_object import BaseFireObject
 
 
 class FireQuery:
@@ -51,7 +53,12 @@ class FireQuery:
             results = [FireObject.from_snapshot(snap) for snap in native_query.stream()]
     """
 
-    def __init__(self, native_query: Query, parent_collection: Optional[Any] = None):
+    def __init__(
+        self,
+        native_query: Query,
+        parent_collection: Optional[Any] = None,
+        projection: Optional[Tuple[Any, ...]] = None,
+    ):
         """
         Initialize a FireQuery.
 
@@ -61,6 +68,36 @@ class FireQuery:
         """
         self._query = native_query
         self._parent_collection = parent_collection
+        self._projection = projection
+
+    # =========================================================================
+    # Internal Helpers
+    # =========================================================================
+
+    @staticmethod
+    def _normalize_field_paths(field_paths: Tuple[Any, ...]) -> Tuple[Any, ...]:
+        """Normalize select() arguments into a tuple of field paths."""
+
+        if len(field_paths) == 1:
+            (first,) = field_paths
+            if isinstance(first, Iterable) and not isinstance(first, (str, bytes)):
+                return tuple(first)
+        return tuple(field_paths)
+
+    def _snapshot_to_result(self, snapshot: Any) -> Union[FireObject, Dict[str, Any]]:
+        """Convert a DocumentSnapshot to either FireObject or projected dict."""
+
+        if self._projection is not None:
+            data = snapshot.to_dict() or {}
+            return {
+                key: BaseFireObject._convert_snapshot_value_for_retrieval(
+                    value,
+                    is_async=False,
+                )
+                for key, value in data.items()
+            }
+
+        return FireObject.from_snapshot(snapshot, self._parent_collection)
 
     # =========================================================================
     # Query Building Methods (Immutable Pattern)
@@ -100,7 +137,7 @@ class FireQuery:
         # Create FieldFilter and add to query
         filter_obj = FieldFilter(field, op, value)
         new_query = self._query.where(filter=filter_obj)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._projection)
 
     def order_by(self, field: str, direction: str = 'ASCENDING') -> 'FireQuery':
         """
@@ -139,7 +176,7 @@ class FireQuery:
             raise ValueError(f"Invalid direction: {direction}. Must be 'ASCENDING' or 'DESCENDING'")
 
         new_query = self._query.order_by(field, direction=direction_const)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._projection)
 
     def limit(self, count: int) -> 'FireQuery':
         """
@@ -167,7 +204,29 @@ class FireQuery:
             raise ValueError(f"Limit count must be positive, got {count}")
 
         new_query = self._query.limit(count)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._projection)
+
+    def select(self, *field_paths: Any) -> 'FireQuery':
+        """
+        Project the query results to only the specified fields.
+
+        When a projection is active, query execution methods return vanilla
+        dictionaries instead of FireObject instances. Any Firestore
+        DocumentReference values in the projected data are automatically
+        converted into FireObject instances.
+
+        Args:
+            *field_paths: Field names or FieldPath objects to include in the
+                projection. You may pass them as positional arguments or as a
+                single iterable (e.g., ``select(['name', 'mentor'])``).
+
+        Returns:
+            A new FireQuery instance with the projection applied.
+        """
+
+        normalized = self._normalize_field_paths(field_paths)
+        new_query = self._query.select(list(normalized))
+        return FireQuery(new_query, self._parent_collection, normalized)
 
     def start_at(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -201,7 +260,7 @@ class FireQuery:
             page2 = users.order_by('age').start_at(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_at(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._projection)
 
     def start_after(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -232,7 +291,7 @@ class FireQuery:
             page2 = users.order_by('age').start_after(last_snapshot).limit(10).get()
         """
         new_query = self._query.start_after(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._projection)
 
     def end_at(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -260,7 +319,7 @@ class FireQuery:
             query = users.order_by('age').end_at(target_snapshot)
         """
         new_query = self._query.end_at(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._projection)
 
     def end_before(self, *document_fields_or_snapshot) -> 'FireQuery':
         """
@@ -288,22 +347,26 @@ class FireQuery:
             query = users.order_by('age').end_before(target_snapshot)
         """
         new_query = self._query.end_before(*document_fields_or_snapshot)
-        return FireQuery(new_query, self._parent_collection)
+        return FireQuery(new_query, self._parent_collection, self._projection)
 
     # =========================================================================
     # Query Execution Methods
     # =========================================================================
 
-    def get(self) -> List[FireObject]:
+    def get(self) -> List[Union[FireObject, Dict[str, Any]]]:
         """
         Execute the query and return results as a list.
 
         Fetches all matching documents and hydrates them into FireObject
-        instances in LOADED state.
+        instances in LOADED state. When a projection is active via
+        :meth:`select`, this returns dictionaries containing only the requested
+        fields. Document references inside those dictionaries are converted to
+        FireObject instances automatically.
 
         Returns:
-            List of FireObject instances for all documents matching the query.
-            Empty list if no documents match.
+            List of results for all documents matching the query. Each result is
+            either a :class:`FireObject` (no projection) or a ``dict`` of
+            projected data. Empty list if no documents match.
 
         Example:
             # Get all results as a list
@@ -320,15 +383,17 @@ class FireQuery:
         """
         # Execute query and hydrate results
         snapshots = self._query.stream()
-        return [FireObject.from_snapshot(snap, self._parent_collection) for snap in snapshots]
+        return [self._snapshot_to_result(snapshot) for snapshot in snapshots]
 
-    def stream(self) -> Iterator[FireObject]:
+    def stream(self) -> Iterator[Union[FireObject, Dict[str, Any]]]:
         """
         Execute the query and stream results as an iterator.
 
         Returns a generator that yields FireObject instances one at a time.
         This is more memory-efficient than .get() for large result sets
-        as it doesn't load all results into memory at once.
+        as it doesn't load all results into memory at once. When a projection is
+        active via :meth:`select`, the iterator yields dictionaries containing
+        the projected data.
 
         Yields:
             FireObject instances in LOADED state for each matching document.
@@ -348,7 +413,19 @@ class FireQuery:
         """
         # Stream results and hydrate on-the-fly
         for snapshot in self._query.stream():
-            yield FireObject.from_snapshot(snapshot, self._parent_collection)
+            yield self._snapshot_to_result(snapshot)
+
+    def get_all(self) -> Iterator[Union[FireObject, Dict[str, Any]]]:
+        """
+        Stream all query results similarly to :meth:`stream`.
+
+        Provided for API parity with :class:`FireCollection.get_all`. When a
+        projection is active, yields dictionaries; otherwise yields FireObject
+        instances.
+        """
+
+        for result in self.stream():
+            yield result
 
     def __repr__(self) -> str:
         """Return string representation of the query."""

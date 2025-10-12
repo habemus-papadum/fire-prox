@@ -7,7 +7,7 @@ the Firestore emulator.
 
 import pytest
 from src.fire_prox.testing import async_testing_client
-from src.fire_prox import AsyncFireProx
+from src.fire_prox import AsyncFireProx, AsyncFireObject
 
 
 @pytest.fixture
@@ -510,3 +510,63 @@ class TestQueryPaginationAsync:
         assert len(page2_results) == 2
         assert page2_results[0].birth_year == 1903  # John
         assert page2_results[1].birth_year == 1815  # Ada
+
+
+@pytest.mark.asyncio
+class TestSelectProjectionAsync:
+    """Test projecting async query results with select()."""
+
+    async def _seed_projection_docs(self, collection):
+        mentor = collection.new()
+        mentor.name = 'Mentor'
+        mentor.skill = 'Coaching'
+        await mentor.save(doc_id='mentor')
+
+        student = collection.new()
+        student.name = 'Student'
+        student.mentor = mentor
+        student.skill = 'Learning'
+        await student.save(doc_id='student')
+
+    async def test_select_get_returns_dicts(self, async_db):
+        """select() should project fields and convert references for async get()."""
+        collection = async_db.collection('select_projection_async_get')
+        await self._seed_projection_docs(collection)
+
+        query = collection.where('name', '==', 'Student').select('name', 'mentor')
+        results = await query.get()
+
+        assert len(results) == 1
+        projected = results[0]
+        assert isinstance(projected, dict)
+        assert set(projected.keys()) == {'name', 'mentor'}
+        assert projected['name'] == 'Student'
+        assert isinstance(projected['mentor'], AsyncFireObject)
+        assert projected['mentor'].path.endswith('mentor')
+
+    async def test_select_stream_returns_dicts(self, async_db):
+        """select() should project fields for async stream()."""
+        collection = async_db.collection('select_projection_async_stream')
+        await self._seed_projection_docs(collection)
+
+        query = collection.where('skill', '==', 'Learning').select(['name'])
+        streamed = []
+        async for item in query.stream():
+            streamed.append(item)
+
+        assert len(streamed) == 1
+        assert isinstance(streamed[0], dict)
+        assert streamed[0] == {'name': 'Student'}
+
+    async def test_select_get_all_iterator(self, async_db):
+        """select() should work with async get_all() iterator."""
+        collection = async_db.collection('select_projection_async_get_all')
+        await self._seed_projection_docs(collection)
+
+        projected = []
+        async for item in collection.select('name').get_all():
+            projected.append(item)
+
+        assert all(isinstance(item, dict) for item in projected)
+        names = {item['name'] for item in projected}
+        assert names == {'Mentor', 'Student'}
