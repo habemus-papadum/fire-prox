@@ -16,7 +16,8 @@
       "WebSearch",
       "WebFetch(domain:firebase.google.com)",
       "WebFetch(domain:extensions.dev)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(pnpm exec firebase emulators:exec:*)"
     ],
     "deny": [],
     "ask": []

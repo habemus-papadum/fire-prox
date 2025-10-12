@@ -20,6 +20,7 @@ nav:
     - Topics:
       - Pagination: demos/topics/pagination.ipynb
       - Dates and Timestamps: demos/topics/dates_and_timestamps.ipynb
+      - Document References: demos/topics/document_references.ipynb
       - Vector Embeddings: demos/topics/vector_embeddings.ipynb
   - Architecture: Architectural_Blueprint.md
   - Implementation Log: Implementation_Log.md
