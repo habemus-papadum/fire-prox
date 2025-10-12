@@ -1,20 +1,20 @@
 """
-FireProx: Main entry point for the library.
+FireProx: Main entry point for the library (synchronous).
 
-This module provides the FireProx class, which serves as the primary interface
-for users to interact with Firestore through the simplified FireProx API.
+This module provides the synchronous FireProx class, which serves as the primary
+interface for users to interact with Firestore through the simplified FireProx API.
 """
 
-from typing import Optional
 from google.cloud.firestore import Client as FirestoreClient
+from .base_fireprox import BaseFireProx
 from .fire_object import FireObject
 from .fire_collection import FireCollection
 from .state import State
 
 
-class FireProx:
+class FireProx(BaseFireProx):
     """
-    Main entry point for the FireProx library.
+    Main entry point for the FireProx library (synchronous).
 
     FireProx wraps the native google-cloud-firestore Client and provides a
     simplified, Pythonic interface for working with Firestore. It delegates
@@ -25,13 +25,12 @@ class FireProx:
     reliability and security of the native client while providing a more
     intuitive developer experience optimized for rapid prototyping.
 
-    Attributes:
-        _client: The underlying google.cloud.firestore.Client instance.
+    This is the synchronous implementation that supports lazy loading.
 
     Usage Examples:
         # Initialize with a pre-configured native client
         from google.cloud import firestore
-        from fireprox import FireProx
+        from fire_prox import FireProx
 
         native_client = firestore.Client(project='my-project')
         db = FireProx(native_client)
@@ -67,11 +66,10 @@ class FireProx:
 
         Raises:
             TypeError: If client is not a google.cloud.firestore.Client instance.
-            ValueError: If client is not properly configured.
 
         Example:
             from google.cloud import firestore
-            from fireprox import FireProx
+            from fire_prox import FireProx
 
             # Option 1: Default credentials
             native_client = firestore.Client()
@@ -87,10 +85,14 @@ class FireProx:
             # Initialize FireProx
             db = FireProx(native_client)
         """
+        # Type checking for sync client
         if not isinstance(client, FirestoreClient):
-            raise TypeError(f"client must be a google.cloud.firestore.Client, got {type(client)}")
+            raise TypeError(
+                f"client must be a google.cloud.firestore.Client, got {type(client)}"
+            )
 
-        self._client = client
+        # Initialize base class
+        super().__init__(client)
 
     # =========================================================================
     # Document Access
@@ -114,13 +116,6 @@ class FireProx:
         Raises:
             ValueError: If path has an odd number of segments (invalid
                        document path) or contains invalid characters.
-
-        Side Effects:
-            Creates FireObject with:
-            - _doc_ref = self._client.document(path)
-            - _state = State.ATTACHED
-            - _data = {} (empty, lazy loaded)
-            - _dirty = False
 
         Example:
             # Root-level document
@@ -183,11 +178,6 @@ class FireProx:
             ValueError: If path has an even number of segments (invalid
                        collection path) or contains invalid characters.
 
-        Side Effects:
-            Creates FireCollection with:
-            - _collection_ref = self._client.collection(path)
-            - _client = self
-
         Example:
             # Root-level collection
             users = db.collection('users')
@@ -212,52 +202,6 @@ class FireProx:
             collection_ref=collection_ref,
             client=self
         )
-
-    # =========================================================================
-    # Client Access
-    # =========================================================================
-
-    @property
-    def native_client(self) -> FirestoreClient:
-        """
-        Get the underlying google-cloud-firestore Client.
-
-        Provides an "escape hatch" for users who need to perform operations
-        not yet supported by FireProx or who want to use advanced native
-        features like transactions, batched writes, or complex queries.
-
-        Returns:
-            The google.cloud.firestore.Client instance passed during init.
-
-        Example:
-            # Use native API for complex queries
-            from google.cloud.firestore_v1.base_query import FieldFilter
-
-            native_query = db.native_client.collection('users').where(
-                filter=FieldFilter('year', 'in', [1815, 1843, 1852])
-            )
-
-            # Hydrate results into FireObjects
-            results = [FireObject.from_snapshot(snap)
-                      for snap in native_query.stream()]
-
-            # Use native API for transactions
-            transaction = db.native_client.transaction()
-            # ... perform transactional operations ...
-        """
-        return self._client
-
-    @property
-    def client(self) -> FirestoreClient:
-        """
-        Alias for native_client. Get the underlying Firestore Client.
-
-        Provided for convenience. Functionally identical to native_client.
-
-        Returns:
-            The google.cloud.firestore.Client instance.
-        """
-        return self._client
 
     # =========================================================================
     # Batch Operations (Phase 2+)
@@ -309,82 +253,3 @@ class FireProx:
                 to_doc.save()
         """
         raise NotImplementedError("Phase 2+ feature - transactions")
-
-    # =========================================================================
-    # Utility Methods
-    # =========================================================================
-
-    def _validate_path(self, path: str, path_type: str) -> None:
-        """
-        Validate a Firestore path.
-
-        Internal utility to ensure paths conform to Firestore requirements.
-
-        Args:
-            path: The path to validate.
-            path_type: Either 'document' or 'collection' for error messages.
-
-        Raises:
-            ValueError: If path is invalid (wrong segment count, invalid
-                       characters, empty segments, etc.).
-
-        Implementation Notes:
-            Firestore paths have specific requirements:
-            - Document paths must have even number of segments
-            - Collection paths must have odd number of segments
-            - Segments cannot be empty
-            - Segments cannot contain certain characters (/, etc.)
-            - Total path length cannot exceed limits
-        """
-        if not path:
-            raise ValueError(f"Path cannot be empty for {path_type}")
-
-        # Split path into segments
-        segments = path.split('/')
-
-        # Check for empty segments
-        if any(not segment for segment in segments):
-            raise ValueError(f"Path cannot contain empty segments: '{path}'")
-
-        # Validate segment count based on type
-        num_segments = len(segments)
-        if path_type == 'document':
-            if num_segments % 2 != 0:
-                raise ValueError(
-                    f"Document path must have even number of segments, got {num_segments}: '{path}'"
-                )
-        elif path_type == 'collection':
-            if num_segments % 2 != 1:
-                raise ValueError(
-                    f"Collection path must have odd number of segments, got {num_segments}: '{path}'"
-                )
-
-    # =========================================================================
-    # Special Methods
-    # =========================================================================
-
-    def __repr__(self) -> str:
-        """
-        Return a detailed string representation for debugging.
-
-        Returns:
-            String showing the project ID and database.
-
-        Example:
-            <FireProx project='my-project' database='(default)'>
-        """
-        project = getattr(self._client, 'project', 'unknown')
-        return f"<FireProx project='{project}' database='(default)'>"
-
-    def __str__(self) -> str:
-        """
-        Return a human-readable string representation.
-
-        Returns:
-            String showing the project ID.
-
-        Example:
-            'FireProx(my-project)'
-        """
-        project = getattr(self._client, 'project', 'unknown')
-        return f"FireProx({project})"

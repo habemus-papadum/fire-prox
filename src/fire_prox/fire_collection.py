@@ -1,29 +1,27 @@
 """
-FireCollection: Interface for working with Firestore collections.
+FireCollection: Interface for working with Firestore collections (synchronous).
 
-This module provides the FireCollection class, which represents a Firestore
-collection and provides methods for creating new documents and querying
-existing ones.
+This module provides the synchronous FireCollection class, which represents a
+Firestore collection and provides methods for creating new documents and
+querying existing ones.
 """
 
 from typing import Optional, Iterator, Any
 from google.cloud.firestore_v1.collection import CollectionReference
+from .base_fire_collection import BaseFireCollection
 from .fire_object import FireObject
 from .state import State
 
 
-class FireCollection:
+class FireCollection(BaseFireCollection):
     """
-    A wrapper around Firestore CollectionReference for document management.
+    A wrapper around Firestore CollectionReference for document management (synchronous).
 
     FireCollection provides a simplified interface for creating new documents
     and querying collections. It serves as a factory for FireObject instances
     and (in Phase 2) will provide a lightweight query builder.
 
-    Attributes:
-        _collection_ref: The underlying CollectionReference from
-                        google-cloud-firestore.
-        _client: Reference to the parent FireProx client instance.
+    This is the synchronous implementation.
 
     Usage Examples:
         # Get a collection
@@ -46,28 +44,6 @@ class FireCollection:
             print(user.name)
     """
 
-    def __init__(
-        self,
-        collection_ref: CollectionReference,
-        client: Optional[Any] = None
-    ):
-        """
-        Initialize a FireCollection.
-
-        Args:
-            collection_ref: The underlying CollectionReference from
-                           google-cloud-firestore.
-            client: Optional reference to the parent FireProx client.
-
-        Note:
-            This constructor is primarily used internally. Users typically
-            create FireCollection instances via:
-            - db.collection('collection_name')
-            - user.collection('subcollection_name')  (Phase 2)
-        """
-        self._collection_ref = collection_ref
-        self._client = client
-
     # =========================================================================
     # Document Creation
     # =========================================================================
@@ -82,14 +58,6 @@ class FireCollection:
 
         Returns:
             A new FireObject instance in DETACHED state.
-
-        Side Effects:
-            Creates FireObject with:
-            - _doc_ref = None
-            - _state = State.DETACHED
-            - _data = {} (empty)
-            - _dirty = True (implicitly, as DETACHED is always dirty)
-            - _parent_collection = self (for save() to use)
 
         Example:
             users = db.collection('users')
@@ -109,20 +77,14 @@ class FireCollection:
         Get a reference to a specific document in this collection.
 
         Creates a FireObject in ATTACHED state pointing to a specific
-        document. No data is fetched until an attribute is accessed.
+        document. No data is fetched until an attribute is accessed
+        (lazy loading).
 
         Args:
             doc_id: The document ID within this collection.
 
         Returns:
             A new FireObject instance in ATTACHED state.
-
-        Side Effects:
-            Creates FireObject with:
-            - _doc_ref = self._collection_ref.document(doc_id)
-            - _state = State.ATTACHED
-            - _data = {} (empty, will be loaded on access)
-            - _dirty = False
 
         Example:
             users = db.collection('users')
@@ -137,43 +99,8 @@ class FireCollection:
         )
 
     # =========================================================================
-    # Properties
+    # Parent Property (Phase 2)
     # =========================================================================
-
-    @property
-    def id(self) -> str:
-        """
-        Get the collection ID (last segment of collection path).
-
-        Returns:
-            The collection ID string.
-
-        Example:
-            users = db.collection('users')
-            print(users.id)  # 'users'
-
-            posts = user.collection('posts')
-            print(posts.id)  # 'posts'
-        """
-        return self._collection_ref.id
-
-    @property
-    def path(self) -> str:
-        """
-        Get the full Firestore path of the collection.
-
-        Returns:
-            The full path string (e.g., 'users' or 'users/uid/posts').
-
-        Example:
-            users = db.collection('users')
-            print(users.path)  # 'users'
-
-            posts = db.doc('users/alovelace').collection('posts')
-            print(posts.path)  # 'users/alovelace/posts'
-        """
-        # _path is a tuple, convert to slash-separated string
-        return '/'.join(self._collection_ref._path)
 
     @property
     def parent(self) -> Optional[FireObject]:
@@ -272,31 +199,3 @@ class FireCollection:
                 print(f"{user.name}: {user.year}")
         """
         raise NotImplementedError("Phase 2 feature - querying")
-
-    # =========================================================================
-    # Special Methods
-    # =========================================================================
-
-    def __repr__(self) -> str:
-        """
-        Return a detailed string representation for debugging.
-
-        Returns:
-            String showing collection path.
-
-        Example:
-            <FireCollection path='users'>
-        """
-        return f"<FireCollection path='{self.path}'>"
-
-    def __str__(self) -> str:
-        """
-        Return a human-readable string representation.
-
-        Returns:
-            String showing the collection path.
-
-        Example:
-            'FireCollection(users)'
-        """
-        return f"FireCollection({self.path})"
