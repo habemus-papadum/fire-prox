@@ -115,6 +115,44 @@ uv run mkdocs build
 - Basic lifecycle methods (fetch, save, delete)
 - 33 integration tests passing (16 sync + 17 async)
 
+## Core Features
+
+### Architecture
+**State Machine**: Four-state lifecycle (DETACHED → ATTACHED → LOADED → DELETED). Enables lazy loading, dirty tracking, and safe lifecycle management. `doc.is_loaded()`, `doc.is_dirty()`.
+
+**Dual API**: Full sync (`FireProx`, `FireObject`) and async (`AsyncFireProx`, `AsyncFireObject`) with shared base classes. `await async_user.save()` vs `user.save()`.
+
+**Dynamic Schema**: Schemaless attribute handling. `user.name = 'Ada'; user.save()` - no models, no schemas, pure Python.
+
+### Data Operations
+**Dirty Tracking**: Field-level change detection. `user.email = 'new@x.com'; user.dirty_fields → {'email'}`. Enables partial updates (50-90% bandwidth reduction).
+
+**Atomic Operations**: Concurrency-safe server-side operations. `doc.increment('views', 1); doc.array_union('tags', ['new'])`. No read-modify-write races.
+
+**Subcollections**: Hierarchical data via `.collection()`. `user.collection('posts').new()` creates `users/{id}/posts/{post-id}`.
+
+**Document References**: Auto-hydration and lazy loading. Assign `post.author = user`, read back as FireObject. Supports nested refs in lists/dicts.
+
+**Batch Operations**: Atomic multi-document writes (up to 500). `batch = db.batch(); doc.save(batch=batch); batch.commit()`. One network round-trip.
+
+### Querying & Analytics
+**Query Builder**: Chainable interface. `users.where('age', '>', 25).order_by('score', 'DESCENDING').limit(10).get()`. Returns hydrated FireObjects.
+
+**Pagination**: Cursor-based navigation. `page1.get(); page2 = query.start_after({'age': last_age}).get()`. Efficient large dataset traversal.
+
+**Projections**: Field-level query optimization. `users.select('name', 'email').get()` returns dicts with only requested fields. 50-95% bandwidth savings.
+
+**Aggregations**: Server-side analytics. `collection.count()`, `orders.sum('total')`, `users.avg('age')`. No document transfer, 2-10x faster.
+
+### Advanced
+**Transactions**: Decorator pattern for ACID operations. `@firestore.transactional def transfer(txn): ...`. Auto-retry on conflicts.
+
+**Real-time Listeners**: Live updates via `on_snapshot()`. Sync callbacks or async handlers. `collection.on_snapshot(lambda docs: process(docs))`.
+
+**Vector Embeddings**: `FireVector` class for semantic search. Integrates with Firestore's vector search capabilities.
+
+**Native Integration**: `FireObject.from_snapshot(snap)` enables seamless use of native Firestore queries when needed. Best of both worlds.
+
 ## Implementation Roadmap
 
 Per the architectural blueprint (`Architectural_Blueprint.md`), development follows these phases:

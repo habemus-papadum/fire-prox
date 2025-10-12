@@ -9,3 +9,5 @@
     - [Phase 2, Part 2](PHASE2_5_IMPLEMENTATION_REPORT.md)
   - Topics
     - [Projections](PROJECTIONS_IMPLEMENTATION_REPORT.md)
+    - [Snapshots](SNAPSHOTS_IMPLEMENTATION_REPORT.md)
+    - [Batches](BATCHES_IMPLEMENTATION_REPORT.md)
