@@ -90,6 +90,9 @@ from .async_fire_query import AsyncFireQuery
 from .state import State
 from .fire_vector import FireVector
 
+# Aggregation helpers
+from .aggregation import Count, Sum, Avg
+
 __version__ = "0.3.0"
 
 __all__ = [
@@ -106,4 +109,8 @@ __all__ = [
     # Shared
     "State",
     "FireVector",
+    # Aggregations
+    "Count",
+    "Sum",
+    "Avg",
 ]

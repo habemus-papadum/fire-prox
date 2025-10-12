@@ -254,3 +254,96 @@ class FireCollection(BaseFireCollection):
         # Stream all documents from the collection
         for snapshot in self._collection_ref.stream():
             yield FireObject.from_snapshot(snapshot, parent_collection=self)
+
+    # =========================================================================
+    # Aggregation Methods (Phase 4 Part 5)
+    # =========================================================================
+
+    def count(self) -> int:
+        """
+        Count documents in the collection.
+
+        Phase 4 Part 5 feature. Returns the total count of documents
+        without fetching their data.
+
+        Returns:
+            The number of documents in the collection.
+
+        Example:
+            total = users.count()
+            print(f"Total users: {total}")
+        """
+        from .fire_query import FireQuery
+        # Use collection reference directly as a query for aggregation
+        query = FireQuery(self._collection_ref, parent_collection=self)
+        return query.count()
+
+    def sum(self, field: str):
+        """
+        Sum a numeric field across all documents.
+
+        Phase 4 Part 5 feature. Calculates the sum of a numeric field
+        without fetching document data.
+
+        Args:
+            field: The field name to sum.
+
+        Returns:
+            The sum of the field values (int or float).
+
+        Example:
+            total_revenue = orders.sum('amount')
+        """
+        from .fire_query import FireQuery
+        # Use collection reference directly as a query for aggregation
+        query = FireQuery(self._collection_ref, parent_collection=self)
+        return query.sum(field)
+
+    def avg(self, field: str) -> float:
+        """
+        Average a numeric field across all documents.
+
+        Phase 4 Part 5 feature. Calculates the average of a numeric field
+        without fetching document data.
+
+        Args:
+            field: The field name to average.
+
+        Returns:
+            The average of the field values (float).
+
+        Example:
+            avg_rating = products.avg('rating')
+        """
+        from .fire_query import FireQuery
+        # Use collection reference directly as a query for aggregation
+        query = FireQuery(self._collection_ref, parent_collection=self)
+        return query.avg(field)
+
+    def aggregate(self, **aggregations):
+        """
+        Execute multiple aggregations in a single query.
+
+        Phase 4 Part 5 feature. Performs multiple aggregation operations
+        (count, sum, avg) in one efficient query.
+
+        Args:
+            **aggregations: Named aggregation operations using Count(), Sum(), or Avg().
+
+        Returns:
+            Dictionary mapping aggregation names to their results.
+
+        Example:
+            from fire_prox import Count, Sum, Avg
+
+            stats = users.aggregate(
+                total=Count(),
+                total_score=Sum('score'),
+                avg_age=Avg('age')
+            )
+            # Returns: {'total': 42, 'total_score': 5000, 'avg_age': 28.5}
+        """
+        from .fire_query import FireQuery
+        # Use collection reference directly as a query for aggregation
+        query = FireQuery(self._collection_ref, parent_collection=self)
+        return query.aggregate(**aggregations)
