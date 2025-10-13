@@ -22,9 +22,10 @@ minimizing churn across the synchronous and asynchronous APIs.
    modeling framework.
 3. **IDE-friendly types** – When a schema is registered, code completion and
    static analysis should understand document attributes.
-4. **Runtime validation** – Provide configurable hooks to validate documents at
-   creation, update, and fetch time. Defaults should be conservative to avoid
-   surprising users.
+4. **Linter-first enforcement** – The primary purpose of the schema system is to
+   improve editor and static-analysis feedback without changing runtime
+   semantics. Validation hooks remain opt-in for teams that explicitly request
+   them.
 5. **Minimal class explosion** – Favor generics and composition over new
    subclasses to prevent duplicating the Fire-Prox surface area.
 6. **Extensible marshalling** – Allow registration of serializers for commonly
@@ -67,6 +68,29 @@ The initial release would ship with built-in adapters for:
 Adapters are registered via a global registry similar to Python's `functools.singledispatch`.
 Users can also register project-specific adapters (e.g., for attrs classes or
 lightweight Pydantic models) without modifying Fire-Prox internals.
+
+### Critique of the Current Proposal
+
+While the adapter-based design provides a solid foundation, it leaves several
+notable gaps when weighed against the goal of lightweight typing support:
+
+- **Query ergonomics** – The proposal does not describe how typed schemas flow
+  into queries, projections, or aggregations, leaving IDEs unaware of the shape
+  of query results.
+- **Sentinel handling** – Firestore "magic" values such as
+  `firestore.SERVER_TIMESTAMP` are not addressed. Without explicit treatment,
+  adapters cannot surface accurate static types or retain runtime behavior.
+- **Partial payloads** – Real-world documents frequently contain extra fields or
+  missing keys. The proposal hints at validation but does not clarify how the
+  typing story tolerates incomplete instances without raising runtime errors.
+- **Static tooling emphasis** – Validation is positioned as a headline feature,
+  which risks implying runtime failures. Given that the immediate need is IDE
+  feedback, the document should de-emphasize validation and show how typing is
+  preserved even when validation is disabled.
+- **Interplay with dynamic access** – The hybrid mutation model is promising but
+  needs clearer guarantees about how dynamic `fire_object["field"]` access and
+  typed attributes coexist, especially when data returned from queries omits
+  fields.
 
 ### Collection-Level Schema Binding
 
@@ -134,6 +158,10 @@ before persistence without penalizing reads.
 Errors raise `SchemaValidationError` with actionable messages and the offending
 field paths.
 
+To keep the feature linter-first, Fire-Prox should default to
+`validate_on={"never"}` and supply guardrails via static types. Teams can opt in
+to stronger guarantees incrementally.
+
 ### Document References via Annotated Types
 
 Adapters interpret `typing.Annotated` metadata to distinguish Firestore document
@@ -158,6 +186,73 @@ available on the `FireObject`. The schema adapter can mark fields as "reserved"
 so they are excluded from persistence but still populated on the schema instance
 for convenience. This allows models to include read-only properties corresponding
 to Firestore metadata while keeping write operations safe.
+
+### Query and Aggregation Typing
+
+Typed schemas should extend beyond individual document fetches. The binding can
+participate in query construction by:
+
+- Propagating the `T_co` type variable onto `Query` objects returned by
+  `collection.where(...)`, `collection.limit(...)`, and similar methods. This
+  allows `for doc in query.stream()` loops to expose typed `FireObject[T_co]`
+  instances to the IDE.
+- Supporting projections (`select`, `select_fields`) by introducing a
+  `TypedProjection[T_partial]` helper. The helper can interpret a field subset
+  and synthesize a `TypedDict` or `Protocol` representing the returned shape.
+  Adapters provide a `project(fields)` method that returns the narrowed type.
+- Ensuring aggregation results carry type metadata. For example,
+  `collection.aggregate(count="id")` could return a `TypedDict` describing the
+  expected keys while allowing adapters to enrich known numeric return types.
+- Allowing custom query operators to request adapter metadata (e.g., field
+  aliases or converters) to keep runtime behavior aligned with static analysis.
+
+### Sentinel and Server Timestamp Support
+
+Firestore exposes sentinel values such as `firestore.SERVER_TIMESTAMP` that are
+commonly applied during `set`/`update`. To keep static typing accurate while
+preserving runtime semantics:
+
+- Adapters should expose a `sentinels` mapping from schema fields to known
+  Firestore sentinel factories. Annotated fields can opt into sentinel behavior
+  via helper markers like `fire_prox.annotations.ServerTimestamp`. During
+  serialization the adapter substitutes the sentinel; when data is fetched the
+  field resolves to `datetime.datetime | None` while retaining IDE awareness of
+  the dual type.
+- `SchemaBinding` tracks fields that accept sentinels to prevent linter errors
+  when code assigns the sentinel constant. This ensures that `user.updated_at =
+  firestore.SERVER_TIMESTAMP` type-checks even when the schema declares the
+  field as `datetime.datetime`.
+- Query projections should recognize sentinel fields and mark them as optional
+  when the Firestore server has not yet populated the value.
+
+### Partial and Evolving Payloads
+
+To align with Fire-Prox's schemaless roots while enabling typing:
+
+- Adapters must tolerate missing or extra fields. `create_instance` should
+  populate default values when possible and surface unknown fields through a
+  dedicated `extras` attribute (e.g., `Mapping[str, Any]`) that developers can
+  inspect without breaking static types.
+- `SchemaBinding` can expose a `strict=False` flag that keeps runtime operations
+  permissive but provides a configuration knob for future tightening.
+- Dynamic attribute access should fall back to the underlying dictionary even
+  when the field is not part of the schema. IDEs can model this via a
+  `Protocol` that includes `__getitem__` returning `Any` alongside typed
+  attributes.
+
+### Static Tooling Integration
+
+To fulfill the linter-first focus:
+
+- Provide `typing_extensions.Protocol` definitions for `FireObject[T_co]` and
+  query iterables so tools like mypy, pyright, and Ruff's checker understand the
+  API surface.
+- Ship stub files (`.pyi`) that mirror runtime modules but include the generic
+  annotations and projection helpers. Stubs allow editors to offer completions
+  even before runtime implementations are complete.
+- Offer mypy and pyright plugins that can read schema registrations from source
+  code, enabling cross-module inference when collections are bound in one file
+  but consumed elsewhere.
 
 ### Marshalling Strategy
 
@@ -192,6 +287,8 @@ feature surface consistent across both APIs.
 - **Testing Strategy** – New unit tests focus on adapter conversions,
   validation hooks, and marshaller registration. Integration tests cover sync
   and async flows with annotated references and reserved fields.
+- **Tooling Samples** – Provide example configurations for mypy, pyright, and
+  Ruff to demonstrate how typed collections surface actionable diagnostics.
 
 ## Open Questions
 
@@ -204,6 +301,15 @@ feature surface consistent across both APIs.
    required.
 4. **IDE integration** – We rely on generics to surface types, but verifying the
    experience across major editors (PyCharm, VS Code) warrants prototyping.
+5. **Server timestamp defaults** – Should sentinel-aware fields automatically
+   mark themselves as optional in schemas, or do we require explicit typing like
+   `datetime | None` to avoid confusion?
+6. **Query result typing** – How far should Fire-Prox go in synthesizing
+   `TypedDict`/`Protocol` types for projections without overwhelming users with
+   complex generics?
+7. **Static analysis scaling** – What heuristics are needed so linters do not
+   re-run expensive adapter discovery on every import, especially in large
+   codebases?
 
 ## Next Steps
 
@@ -212,8 +318,13 @@ feature surface consistent across both APIs.
    API, then mirror for the async API.
 3. Design validation and marshalling configuration objects, including sensible
    defaults.
-4. Author developer documentation with migration guides and examples.
-5. Solicit feedback from early adopters before finalizing the API surface.
+4. Extend query objects with generic typing and projection helpers, ensuring
+   stubs and protocols compile under mypy and pyright.
+5. Implement sentinel annotations and ensure runtime behavior mirrors Firestore
+   semantics without introducing validation errors.
+6. Author developer documentation with migration guides and examples emphasizing
+   IDE usage and linter configuration.
+7. Solicit feedback from early adopters before finalizing the API surface.
 
 This proposal provides a path to post-hoc schema enforcement without sacrificing
 Fire-Prox's prototyping strengths or demanding wholesale rewrites of existing
