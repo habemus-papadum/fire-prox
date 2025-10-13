@@ -11,8 +11,8 @@
 | src/fire\_prox/async\_fire\_query.py      |      146 |       20 |     86.30% |146, 174, 352, 403, 457, 512, 584-586, 588-590, 601, 604, 608, 611, 662, 674, 838, 846 |
 | src/fire\_prox/async\_fireprox.py         |       23 |        2 |     91.30% |   79, 153 |
 | src/fire\_prox/base\_fire\_collection.py  |       23 |        1 |     95.65% |       214 |
-| src/fire\_prox/base\_fire\_object.py      |      208 |       18 |     91.35% |75, 258, 304, 350, 425-426, 430, 434, 459, 462, 485, 560, 643, 723, 777, 794-795, 832 |
-| src/fire\_prox/base\_fireprox.py          |       30 |        1 |     96.67% |       226 |
+| src/fire\_prox/base\_fire\_object.py      |      208 |       20 |     90.38% |72-75, 258, 304, 350, 425-426, 430, 434, 459, 462, 485, 560, 643, 723, 777, 794-795, 832 |
+| src/fire\_prox/base\_fireprox.py          |       30 |        3 |     90.00% |226, 262-263 |
 | src/fire\_prox/fire\_collection.py        |       59 |        0 |    100.00% |           |
 | src/fire\_prox/fire\_object.py            |      112 |       23 |     79.46% |85, 98-102, 106-109, 121, 136, 288, 316, 348-362 |
 | src/fire\_prox/fire\_query.py             |      143 |       19 |     86.71% |144, 172, 349, 400, 453, 507, 579-581, 583-585, 596, 599, 603, 606, 656, 668, 835 |
@@ -20,7 +20,7 @@
 | src/fire\_prox/fireprox.py                |       20 |        2 |     90.00% |   91, 157 |
 | src/fire\_prox/state.py                   |        8 |        0 |    100.00% |           |
 | src/fire\_prox/testing/\_\_init\_\_.py    |       86 |       23 |     73.26% |39-43, 53-55, 65-67, 78-87, 90, 103-104, 107 |
-|                                 **TOTAL** | **1103** |  **134** | **87.85%** |           |
+|                                 **TOTAL** | **1103** |  **138** | **87.49%** |           |
 
 
 ## Setup coverage badge
