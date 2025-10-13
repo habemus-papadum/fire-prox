@@ -161,7 +161,7 @@ class AsyncFireObject(BaseFireObject):
             if not snapshot.exists:
                 raise NotFound(f"Document {self._sync_doc_ref.path} does not exist")
 
-            # Get data and convert special types (DocumentReference → FireObject, Vector → FireVector, etc.)
+            # Get data and convert special types (DocumentReference → FireObject, etc.)
             data = snapshot.to_dict() or {}
             converted_data = {}
             sync_client = (
