@@ -5,13 +5,35 @@ This module contains the base class that implements all logic that is
 identical between synchronous and asynchronous FireObject implementations.
 """
 
+from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Any, Dict, Optional, Set
 
+from google.cloud import firestore
+from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 from google.cloud.firestore_v1.vector import Vector
 
 from .state import State
+
+
+class _SaveAction(Enum):
+    """Internal enum describing the type of write to perform."""
+
+    NOOP = auto()
+    CREATE = auto()
+    SET = auto()
+    UPDATE = auto()
+
+
+@dataclass
+class _SavePlan:
+    """Structured description of the work required for ``save``."""
+
+    action: _SaveAction
+    doc_ref: Optional[Any] = None
+    payload: Optional[Dict[str, Any]] = None
 
 
 class BaseFireObject:
@@ -252,11 +274,6 @@ class BaseFireObject:
         # Return appropriate collection type based on client type
         # The concrete class will override this if needed
         if hasattr(self._doc_ref, '__class__') and 'Async' in self._doc_ref.__class__.__name__:
-            # Get sync client if available for async lazy loading
-            sync_collection_ref = None
-            if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref:
-                sync_collection_ref = self._sync_doc_ref.collection(name)
-
             return AsyncFireCollection(
                 subcollection_ref,
                 client=None,  # Will be inferred from ref
@@ -436,8 +453,9 @@ class BaseFireObject:
             # Enforce mutual exclusivity: cannot modify field with pending atomic operation
             if hasattr(self, '_atomic_ops') and name in self._atomic_ops:
                 raise ValueError(
-                    f"Cannot modify field '{name}' directly - "
-                    f"field has a pending atomic operation. Save changes first or use vanilla modifications exclusively."
+                    "Cannot modify field "
+                    f"'{name}' directly - field has a pending atomic operation. "
+                    "Save changes first or use vanilla modifications exclusively."
                 )
 
             # Convert special types for storage (FireObject → DocumentReference, FireVector → Vector, etc.)
@@ -576,6 +594,240 @@ class BaseFireObject:
     def _transition_to_deleted(self) -> None:
         """Transition to DELETED state."""
         object.__setattr__(self, '_state', State.DELETED)
+
+    def _sync_client_for_materialization(self) -> Optional[Any]:
+        """Return the sync client used for nested conversions, if any."""
+
+        if hasattr(self, '_sync_client') and self._sync_client:
+            return self._sync_client
+        if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref:
+            return self._sync_doc_ref._client
+        return None
+
+    # =========================================================================
+    # Firestore I/O Hooks (Implemented by subclasses)
+    # =========================================================================
+
+    def _get_snapshot(self, transaction: Optional[Any] = None) -> Any:
+        """Retrieve a DocumentSnapshot for this object.
+
+        Concrete subclasses must implement this to perform the appropriate
+        Firestore client operation (sync or async) and return the resulting
+        snapshot object.
+        """
+
+        raise NotImplementedError("Subclasses must implement _get_snapshot()")
+
+    def _create_document(self, doc_id: Optional[str] = None) -> Any:
+        """Create a new document reference for DETACHED objects.
+
+        Returns a client-specific document reference that should be used for
+        initial writes when saving a DETACHED object.
+        """
+
+        raise NotImplementedError("Subclasses must implement _create_document()")
+
+    def _write_set(
+        self,
+        doc_ref: Any,
+        data: Dict[str, Any],
+        transaction: Optional[Any] = None,
+        batch: Optional[Any] = None,
+    ) -> Any:
+        """Write a full document replacement to Firestore."""
+
+        raise NotImplementedError("Subclasses must implement _write_set()")
+
+    def _write_update(
+        self,
+        update_dict: Dict[str, Any],
+        transaction: Optional[Any] = None,
+        batch: Optional[Any] = None,
+    ) -> Any:
+        """Apply a partial update to the backing document."""
+
+        raise NotImplementedError("Subclasses must implement _write_update()")
+
+    def _write_delete(self, batch: Optional[Any] = None) -> Any:
+        """Delete the backing Firestore document."""
+
+        raise NotImplementedError("Subclasses must implement _write_delete()")
+
+    # =========================================================================
+    # Shared lifecycle helpers
+    # =========================================================================
+
+    def _should_skip_fetch(self, force: bool) -> bool:
+        """Validate state and determine if fetch work can be skipped."""
+
+        self._validate_not_detached("fetch()")
+        self._validate_not_deleted("fetch()")
+        return self._state == State.LOADED and not force
+
+    def _finalize_fetch_from_snapshot(self, snapshot: DocumentSnapshot) -> 'BaseFireObject':
+        """Populate internal state from a Firestore snapshot."""
+
+        if not snapshot.exists:
+            path = getattr(self._doc_ref, 'path', 'unknown-document')
+            raise NotFound(f"Document {path} does not exist")
+
+        data = snapshot.to_dict() or {}
+        converted_data = {}
+        sync_client = self._sync_client_for_materialization()
+        is_async = self._is_async_context()
+        for key, value in data.items():
+            converted_data[key] = self._convert_snapshot_value_for_retrieval(
+                value,
+                is_async=is_async,
+                sync_client=sync_client,
+            )
+
+        self._transition_to_loaded(converted_data)
+        return self
+
+    def _build_update_dict(self) -> Dict[str, Any]:
+        """Create the minimal payload for partial updates."""
+
+        update_dict: Dict[str, Any] = {}
+
+        for field in self._dirty_fields:
+            update_dict[field] = self._convert_value_for_storage(self._data[field])
+
+        for field in self._deleted_fields:
+            update_dict[field] = firestore.DELETE_FIELD
+
+        for field, operation in self._atomic_ops.items():
+            update_dict[field] = operation
+
+        return update_dict
+
+    def _build_save_plan(
+        self,
+        doc_id: Optional[str],
+        transaction: Optional[Any],
+        batch: Optional[Any],
+    ) -> _SavePlan:
+        """Determine the write operation required for ``save``."""
+
+        self._validate_not_deleted("save()")
+
+        if self._state == State.DETACHED:
+            if transaction is not None:
+                raise ValueError(
+                    "Cannot create new documents (DETACHED -> LOADED) within a transaction. "
+                    "Create the document first, then use transactions for updates."
+                )
+            if batch is not None:
+                raise ValueError(
+                    "Cannot create new documents (DETACHED -> LOADED) within a batch. "
+                    "Create the document first, then use batches for updates."
+                )
+
+            doc_ref = self._create_document(doc_id)
+            storage_data = self._prepare_data_for_storage()
+            return _SavePlan(_SaveAction.CREATE, doc_ref=doc_ref, payload=storage_data)
+
+        if self._state == State.ATTACHED:
+            storage_data = self._prepare_data_for_storage()
+            return _SavePlan(_SaveAction.SET, doc_ref=self._doc_ref, payload=storage_data)
+
+        if self._state == State.LOADED:
+            if not self.is_dirty():
+                return _SavePlan(_SaveAction.NOOP)
+
+            update_dict = self._build_update_dict()
+            return _SavePlan(_SaveAction.UPDATE, doc_ref=self._doc_ref, payload=update_dict)
+
+        return _SavePlan(_SaveAction.NOOP)
+
+    def _execute_save_plan_sync(
+        self,
+        plan: _SavePlan,
+        transaction: Optional[Any],
+        batch: Optional[Any],
+    ) -> None:
+        """Perform a save according to ``plan`` for synchronous subclasses."""
+
+        if plan.action is _SaveAction.NOOP:
+            return
+
+        if plan.action is _SaveAction.CREATE:
+            self._write_set(plan.doc_ref, plan.payload or {}, transaction, batch)
+            object.__setattr__(self, '_doc_ref', plan.doc_ref)
+            self._transition_to_loaded(self._data)
+            return
+
+        if plan.action is _SaveAction.SET:
+            self._write_set(plan.doc_ref, plan.payload or {}, transaction, batch)
+            object.__setattr__(self, '_state', State.LOADED)
+            self._mark_clean()
+            return
+
+        if plan.action is _SaveAction.UPDATE:
+            self._write_update(plan.payload or {}, transaction, batch)
+            self._mark_clean()
+
+    async def _execute_save_plan_async(
+        self,
+        plan: _SavePlan,
+        transaction: Optional[Any],
+        batch: Optional[Any],
+    ) -> None:
+        """Perform a save according to ``plan`` for async subclasses."""
+
+        if plan.action is _SaveAction.NOOP:
+            return
+
+        if plan.action is _SaveAction.CREATE:
+            await self._write_set(plan.doc_ref, plan.payload or {}, transaction, batch)
+            object.__setattr__(self, '_doc_ref', plan.doc_ref)
+            self._transition_to_loaded(self._data)
+            return
+
+        if plan.action is _SaveAction.SET:
+            await self._write_set(plan.doc_ref, plan.payload or {}, transaction, batch)
+            object.__setattr__(self, '_state', State.LOADED)
+            self._mark_clean()
+            return
+
+        if plan.action is _SaveAction.UPDATE:
+            await self._write_update(plan.payload or {}, transaction, batch)
+            self._mark_clean()
+
+    def _delete_sync(self, batch: Optional[Any] = None) -> None:
+        """Shared delete logic for synchronous subclasses."""
+
+        self._validate_not_detached("delete()")
+        self._validate_not_deleted("delete()")
+        self._write_delete(batch=batch)
+        self._transition_to_deleted()
+
+    async def _delete_async(self, batch: Optional[Any] = None) -> None:
+        """Shared delete logic for async subclasses."""
+
+        self._validate_not_detached("delete()")
+        self._validate_not_deleted("delete()")
+        await self._write_delete(batch=batch)
+        self._transition_to_deleted()
+
+    def _materialize_field(self, name: str) -> Any:
+        """Return a field value with conversions applied and cached."""
+
+        if name not in self._data:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+        value = self._data[name]
+        converted = self._convert_snapshot_value_for_retrieval(
+            value,
+            is_async=self._is_async_context(),
+            sync_client=self._sync_client_for_materialization(),
+        )
+
+        # Cache converted value if changed
+        if converted is not value:
+            self._data[name] = converted
+
+        return converted
 
     # =========================================================================
     # Real-Time Listeners (Sync-only via _sync_doc_ref or _doc_ref)

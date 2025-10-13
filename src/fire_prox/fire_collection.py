@@ -66,11 +66,7 @@ class FireCollection(BaseFireCollection):
             user.year = 1815
             user.save(doc_id='alovelace')  # Now LOADED
         """
-        return FireObject(
-            doc_ref=None,
-            initial_state=State.DETACHED,
-            parent_collection=self
-        )
+        return FireObject(**self._build_object_kwargs(doc_ref=None, initial_state=State.DETACHED))
 
     def doc(self, doc_id: str) -> FireObject:
         """
@@ -93,9 +89,10 @@ class FireCollection(BaseFireCollection):
         """
         doc_ref = self._collection_ref.document(doc_id)
         return FireObject(
-            doc_ref=doc_ref,
-            initial_state=State.ATTACHED,
-            parent_collection=self
+            **self._build_object_kwargs(
+                doc_ref=doc_ref,
+                initial_state=State.ATTACHED,
+            )
         )
 
     # =========================================================================

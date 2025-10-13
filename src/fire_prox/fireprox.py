@@ -5,6 +5,8 @@ This module provides the synchronous FireProx class, which serves as the primary
 interface for users to interact with Firestore through the simplified FireProx API.
 """
 
+from typing import Any
+
 from google.cloud.firestore import Client as FirestoreClient
 
 from .base_fireprox import BaseFireProx
@@ -128,18 +130,8 @@ class FireProx(BaseFireProx):
             # Lazy loading
             print(user.name)  # Triggers fetch on first access
         """
-        # Validate path
-        self._validate_path(path, 'document')
-
-        # Create document reference
-        doc_ref = self._client.document(path)
-
-        # Return FireObject in ATTACHED state
-        return FireObject(
-            doc_ref=doc_ref,
-            initial_state=State.ATTACHED,
-            parent_collection=None
-        )
+        doc_ref = self._resolve_document(path)
+        return self._wrap_document(doc_ref)
 
     def document(self, path: str) -> FireObject:
         """
@@ -192,16 +184,21 @@ class FireProx(BaseFireProx):
             new_post.title = 'Analysis Engine'
             new_post.save()
         """
-        # Validate path
-        self._validate_path(path, 'collection')
+        collection_ref = self._resolve_collection(path)
+        return self._wrap_collection(collection_ref)
 
-        # Create collection reference
-        collection_ref = self._client.collection(path)
+    # ------------------------------------------------------------------
+    # BaseFireProx hook implementations
+    # ------------------------------------------------------------------
 
-        # Return FireCollection
-        return FireCollection(
-            collection_ref=collection_ref,
-            client=self
+    def _wrap_document(self, doc_ref: Any, **kwargs: Any) -> FireObject:
+        return FireObject(
+            doc_ref=doc_ref,
+            initial_state=State.ATTACHED,
+            parent_collection=None,
         )
+
+    def _wrap_collection(self, collection_ref: Any, **kwargs: Any) -> FireCollection:
+        return FireCollection(collection_ref=collection_ref, client=self)
 
     # Note: batch() and transaction() methods are inherited from BaseFireProx

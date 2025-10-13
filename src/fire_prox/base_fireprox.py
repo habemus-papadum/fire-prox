@@ -37,6 +37,32 @@ class BaseFireProx:
         self._client = client
 
     # =========================================================================
+    # Reference Helpers (SHARED)
+    # =========================================================================
+
+    def _resolve_document(self, path: str) -> Any:
+        """Validate and return a document reference for ``path``."""
+
+        self._validate_path(path, 'document')
+        return self._client.document(path)
+
+    def _resolve_collection(self, path: str) -> Any:
+        """Validate and return a collection reference for ``path``."""
+
+        self._validate_path(path, 'collection')
+        return self._client.collection(path)
+
+    def _wrap_document(self, doc_ref: Any, **kwargs: Any) -> Any:
+        """Subclasses construct document wrappers from ``doc_ref``."""
+
+        raise NotImplementedError("Subclasses must implement _wrap_document()")
+
+    def _wrap_collection(self, collection_ref: Any, **kwargs: Any) -> Any:
+        """Subclasses construct collection wrappers from ``collection_ref``."""
+
+        raise NotImplementedError("Subclasses must implement _wrap_collection()")
+
+    # =========================================================================
     # Client Access (SHARED)
     # =========================================================================
 

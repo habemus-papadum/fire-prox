@@ -62,10 +62,11 @@ class AsyncFireCollection(BaseFireCollection):
             await user.save(doc_id='alovelace')  # Now LOADED
         """
         return AsyncFireObject(
-            doc_ref=None,
-            initial_state=State.DETACHED,
-            parent_collection=self,
-            sync_client=self._sync_client
+            **self._build_object_kwargs(
+                doc_ref=None,
+                initial_state=State.DETACHED,
+                sync_client=self._sync_client,
+            )
         )
 
     def doc(self, doc_id: str) -> AsyncFireObject:
@@ -90,16 +91,16 @@ class AsyncFireCollection(BaseFireCollection):
         # Create both async and sync doc refs
         async_doc_ref = self._collection_ref.document(doc_id)
         sync_doc_ref = None
-        if self._sync_client:
-            sync_collection_ref = self._sync_client.collection(self.path)
-            sync_doc_ref = sync_collection_ref.document(doc_id)
+        if self._sync_client and self._client:
+            _, sync_doc_ref = self._client._paired_document_refs(f"{self.path}/{doc_id}")
 
         return AsyncFireObject(
-            doc_ref=async_doc_ref,
-            sync_doc_ref=sync_doc_ref,
-            sync_client=self._sync_client,
-            initial_state=State.ATTACHED,
-            parent_collection=self
+            **self._build_object_kwargs(
+                doc_ref=async_doc_ref,
+                initial_state=State.ATTACHED,
+                sync_doc_ref=sync_doc_ref,
+                sync_client=self._sync_client,
+            )
         )
 
     # =========================================================================

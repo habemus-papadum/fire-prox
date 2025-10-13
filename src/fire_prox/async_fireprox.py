@@ -5,6 +5,8 @@ This module provides the AsyncFireProx class, which serves as the primary interf
 for users to interact with Firestore asynchronously through the FireProx API.
 """
 
+from typing import Any, Tuple
+
 from google.cloud.firestore import AsyncClient as AsyncFirestoreClient
 
 from .async_fire_collection import AsyncFireCollection
@@ -127,18 +129,8 @@ class AsyncFireProx(BaseFireProx):
             post = db.doc('users/alovelace/posts/post123')
             await post.fetch()
         """
-        self._validate_path(path, 'document')
-
-        # Create both async and sync doc refs
-        async_doc_ref = self._client.document(path)
-        sync_doc_ref = self._sync_client.document(path)
-
-        return AsyncFireObject(
-            doc_ref=async_doc_ref,
-            sync_doc_ref=sync_doc_ref,
-            initial_state=State.ATTACHED,
-            parent_collection=None
-        )
+        async_doc_ref, sync_doc_ref = self._paired_document_refs(path)
+        return self._wrap_document(async_doc_ref, sync_doc_ref=sync_doc_ref)
 
     def document(self, path: str) -> AsyncFireObject:
         """
@@ -186,14 +178,32 @@ class AsyncFireProx(BaseFireProx):
             new_post.title = 'Analysis Engine'
             await new_post.save()
         """
-        self._validate_path(path, 'collection')
+        collection_ref = self._resolve_collection(path)
+        return self._wrap_collection(collection_ref)
 
-        collection_ref = self._client.collection(path)
+    # ------------------------------------------------------------------
+    # BaseFireProx hook implementations
+    # ------------------------------------------------------------------
 
+    def _paired_document_refs(self, path: str) -> Tuple[Any, Any]:
+        async_ref = self._resolve_document(path)
+        sync_ref = self._sync_client.document(path)
+        return async_ref, sync_ref
+
+    def _wrap_document(self, doc_ref: Any, **kwargs: Any) -> AsyncFireObject:
+        return AsyncFireObject(
+            doc_ref=doc_ref,
+            sync_doc_ref=kwargs.get('sync_doc_ref'),
+            initial_state=State.ATTACHED,
+            parent_collection=None,
+            sync_client=self._sync_client,
+        )
+
+    def _wrap_collection(self, collection_ref: Any, **kwargs: Any) -> AsyncFireCollection:
         return AsyncFireCollection(
             collection_ref=collection_ref,
             client=self,
-            sync_client=self._sync_client
+            sync_client=self._sync_client,
         )
 
     # Note: batch() and transaction() methods are inherited from BaseFireProx

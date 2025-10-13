@@ -5,7 +5,7 @@ This module contains the base class that implements all logic that is
 identical between synchronous and asynchronous FireCollection implementations.
 """
 
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 
 class BaseFireCollection:
@@ -41,6 +41,35 @@ class BaseFireCollection:
         self._collection_ref = collection_ref
         self._client = client
         self._sync_client = sync_client
+
+    # =========================================================================
+    # Helper Construction Methods (SHARED)
+    # =========================================================================
+
+    def _build_object_kwargs(
+        self,
+        *,
+        doc_ref: Any,
+        initial_state: Any,
+        parent_collection: Optional[Any] = None,
+        sync_doc_ref: Optional[Any] = None,
+        sync_client: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Standardize FireObject/AsyncFireObject initialization arguments."""
+
+        kwargs: Dict[str, Any] = {
+            'doc_ref': doc_ref,
+            'initial_state': initial_state,
+            'parent_collection': parent_collection or self,
+        }
+
+        if sync_doc_ref is not None:
+            kwargs['sync_doc_ref'] = sync_doc_ref
+
+        if sync_client is not None:
+            kwargs['sync_client'] = sync_client
+
+        return kwargs
 
     # =========================================================================
     # Transaction Support (SHARED)
