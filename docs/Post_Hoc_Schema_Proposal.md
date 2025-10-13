@@ -84,12 +84,42 @@ class FireObject(Generic[T_co]):
     schema_type: type[T_co] | None
 ```
 
-When no schema is supplied, `T_co` defaults to `Mapping[str, Any]`, preserving
-existing type signatures. The async counterparts mirror this arrangement. For
-static analysis, we expose a composite alias such as
-`TypedFireObject[T] = FireObject[T] & T` so that IDEs recognize both the
-Fire-Prox lifecycle methods (e.g., `save`, `delete`, `fetch`) and the dataclass
-fields without raising spurious warnings.
+When no schema is supplied, `T_co` defaults to `types.SimpleNamespace` so that
+attribute access continues to feel natural while staying loose enough for the
+dynamic prototyping story. The async counterparts mirror this arrangement. For
+static analysis we prefer modeling `FireObject[T]` itself as a structural
+extension of `T`, keeping a standalone alias like
+`TypedFireObject[T] = FireObject[T] & T` unnecessary. Tooling should instead see
+`FireObject[T]` (and the async equivalent) as providing both Fire-Prox lifecycle
+methods (e.g., `save`, `delete`, `fetch`) and the dataclass fields without
+raising spurious warnings.
+
+### Example Usage
+
+```python
+@dataclass
+class UserProfile:
+    display_name: str
+    age: int
+
+
+@dataclass
+class Order:
+    purchaser: FireObject[UserProfile]  # FireObject already surfaces the schema
+    total: float
+
+
+users = db.collection("users").with_schema(UserProfile)
+orders = db.collection("orders").with_schema(Order)
+
+ada = users.doc("ada")  # linter should see this as a UserProfile
+order_doc = orders.new()  # linter should see this as an Order
+# Docs obtained from queries should also work the same way
+
+order_doc.purchaser = ada
+order_doc.total = 199.00
+order_doc.save()  # linter should not complain when using FireObject methods
+```
 
 ### Query Type Propagation
 
@@ -122,31 +152,10 @@ Provide two ergonomic patterns:
 - **Typed view**: Static type checkers see a `FireObject` that is also
   compatible with the dataclass schema. This means methods such as `.save()` or
   `.delete()` remain visible to the linter while dataclass fields surface for
-  attribute completion. Practically, the type alias resembles
-  `TypedFireObject[T] = FireObject & T`.
+  attribute completion without needing an additional alias.
 - **Dynamic fallback**: Direct attribute access on the `FireObject` (current
   behavior) remains available. Attribute writes are not blocked or validated
   against schema metadata.
-
-### Document References via Annotated Types
-
-Dataclass field annotations may use `typing.Annotated` metadata to distinguish
-Firestore document references from embedded data. Example:
-
-```python
-from typing import Annotated
-
-@dataclass
-class Order:
-    customer: Annotated[CustomerRef, "fire_prox.DocumentReference"]
-```
-
-The annotation tag instructs Fire-Prox's typing metadata to surface `customer`
-as a Firestore reference (or `firestore.AsyncDocumentReference` in async
-contexts) for typing purposes. Fire-Prox can ship helper aliases like
-`fire_prox.annotations.DocRef[Customer]` to reduce stringly-typed metadata while
-staying decoupled from any one modeling framework. Runtime behavior remains the
-same; annotations only inform static type checkers.
 
 ### Async Parity
 
@@ -159,8 +168,8 @@ both APIs.
 ## Migration and Compatibility
 
 - **Default Behavior** – If users ignore the new API, Fire-Prox behaves exactly
-  as before. Types default to `Mapping[str, Any]`, and no additional metadata
-  processing occurs.
+  as before. Types default to `types.SimpleNamespace`, and no additional
+  metadata processing occurs.
 - **Incremental Adoption** – Teams can gradually adopt schemas collection by
   collection. Dataclass declarations live alongside existing code and do not
   require framework-specific registries.
@@ -180,7 +189,7 @@ both APIs.
 ## Next Steps
 
 1. Prototype the dataclass introspection helpers and verify they capture field
-   types, document-reference annotations, and metadata needed for generics.
+   types and metadata needed for generics.
 2. Implement collection binding and generic type propagation for the synchronous
    API, then mirror for the async API.
 3. Author developer documentation with migration guides and examples.
@@ -197,9 +206,8 @@ analysis. The proposed approach is:
 
 1. **Type-fixture modules** – Add small Python modules under `tests/static_typing`
    that instantiate typed collections, execute queries (excluding projections),
-   call lifecycle methods such as `save()`/`delete()`, and access document
-   references annotated with `DocRef`. These modules do not run during normal
-   test execution.
+   and call lifecycle methods such as `save()`/`delete()`. These modules do not
+   run during normal test execution.
 2. **Linter/Type-checker run** – Integrate `pyright` or `mypy` (in strict mode)
    into CI to analyze the fixture modules. Successful runs confirm that type
    information propagates and no unexpected errors are reported.
@@ -214,9 +222,8 @@ emulator or altering runtime execution paths.
 ## Implementation Plan
 
 1. **Dataclass schema analysis**
-   - Implement utilities that inspect dataclass field annotations and convert
-     them into Fire-Prox typing metadata.
-   - Provide helper annotations for document references (`DocRef[T]`).
+    - Implement utilities that inspect dataclass field annotations and convert
+      them into Fire-Prox typing metadata.
 2. **Schema binding on collections**
    - Extend `FireCollection` and `AsyncFireCollection` to accept a schema and
      store the dataclass type alongside derived metadata.
@@ -228,8 +235,8 @@ emulator or altering runtime execution paths.
    - Propagate generics through query builders (excluding projections) and
      aggregates so that result types remain discoverable by type checkers.
 4. **Documentation and developer experience**
-   - Update docstrings and guides with examples of registering schemas, using
-     document reference annotations, and running static type checks.
+    - Update docstrings and guides with examples of registering schemas and
+      running static type checks.
 5. **Static analysis test harness**
    - Add the type-fixture modules and configure CI to run `pyright`/`mypy`
      against them, capturing both positive and negative cases.
