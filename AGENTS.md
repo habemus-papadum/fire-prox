@@ -69,6 +69,11 @@ uv run ruff check src/
 uv run ruff check --fix src/
 ```
 
+### Static Typing Fixtures
+- Positive and negative fixtures live in `tests/static_typing/`.
+- Run `uv run pyright tests/static_typing/post_hoc_schema_pass.py` for a quick check.
+- The Pyright-based unit test `tests/test_static_typing_post_hoc_schema.py` ensures the typing metadata remains healthy.
+
 ### Documentation
 Documentation uses **numpy** formatted docstrings.  
 

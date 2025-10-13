@@ -89,7 +89,9 @@ from .fire_query import FireQuery
 from .fireprox import FireProx
 
 # Shared
+from .schema import AsyncDocRef, DocRef
 from .state import State
+from .typing_aliases import TypedAsyncFireObject, TypedFireObject
 
 __version__ = "0.3.0"
 
@@ -106,6 +108,10 @@ __all__ = [
     "AsyncFireQuery",
     # Shared
     "State",
+    "DocRef",
+    "AsyncDocRef",
+    "TypedFireObject",
+    "TypedAsyncFireObject",
     # Aggregations
     "Count",
     "Sum",

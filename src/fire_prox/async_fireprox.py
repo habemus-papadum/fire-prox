@@ -146,7 +146,7 @@ class AsyncFireProx(BaseFireProx):
     # Collection Access
     # =========================================================================
 
-    def collection(self, path: str) -> AsyncFireCollection:
+    def collection(self, path: str) -> AsyncFireCollection[Any]:
         """
         Get a reference to a collection by its path.
 

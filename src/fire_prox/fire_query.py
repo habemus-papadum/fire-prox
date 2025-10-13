@@ -1,21 +1,23 @@
-"""
-FireQuery: Chainable query builder for Firestore (synchronous).
+"""Synchronous query wrapper that preserves optional schema typing."""
 
-This module provides the synchronous FireQuery class, which wraps native
-Firestore Query objects and provides a chainable interface for building and
-executing queries.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Generic, Iterator, List, Optional, TypeVar, Union, cast
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.document import DocumentReference
 from google.cloud.firestore_v1.query import Query
 
+from .base_fire_collection import BaseFireCollection
 from .fire_object import FireObject
 
+SchemaT = TypeVar("SchemaT", covariant=True)
 
-class FireQuery:
+if TYPE_CHECKING:
+    from .typing_aliases import TypedFireObject
+
+
+class FireQuery(Generic[SchemaT]):
     """
     A chainable query builder for Firestore collections (synchronous).
 
@@ -57,7 +59,7 @@ class FireQuery:
     def __init__(
         self,
         native_query: Query,
-        parent_collection: Optional[Any] = None,
+        parent_collection: Optional[BaseFireCollection[SchemaT]] = None,
         projection: Optional[tuple] = None,
     ):
         """
@@ -76,7 +78,7 @@ class FireQuery:
     # Query Building Methods (Immutable Pattern)
     # =========================================================================
 
-    def where(self, field: str, op: str, value: Any) -> 'FireQuery':
+    def where(self, field: str, op: str, value: Any) -> 'FireQuery[SchemaT]':
         """
         Add a filter condition to the query.
 
@@ -112,7 +114,7 @@ class FireQuery:
         new_query = self._query.where(filter=filter_obj)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def order_by(self, field: str, direction: str = 'ASCENDING') -> 'FireQuery':
+    def order_by(self, field: str, direction: str = 'ASCENDING') -> 'FireQuery[SchemaT]':
         """
         Add an ordering clause to the query.
 
@@ -151,7 +153,7 @@ class FireQuery:
         new_query = self._query.order_by(field, direction=direction_const)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def limit(self, count: int) -> 'FireQuery':
+    def limit(self, count: int) -> 'FireQuery[SchemaT]':
         """
         Limit the number of results returned.
 
@@ -179,7 +181,7 @@ class FireQuery:
         new_query = self._query.limit(count)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def start_at(self, *document_fields_or_snapshot) -> 'FireQuery':
+    def start_at(self, *document_fields_or_snapshot) -> 'FireQuery[SchemaT]':
         """
         Start query results at a cursor position (inclusive).
 
@@ -213,7 +215,7 @@ class FireQuery:
         new_query = self._query.start_at(*document_fields_or_snapshot)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def start_after(self, *document_fields_or_snapshot) -> 'FireQuery':
+    def start_after(self, *document_fields_or_snapshot) -> 'FireQuery[SchemaT]':
         """
         Start query results after a cursor position (exclusive).
 
@@ -244,7 +246,7 @@ class FireQuery:
         new_query = self._query.start_after(*document_fields_or_snapshot)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def end_at(self, *document_fields_or_snapshot) -> 'FireQuery':
+    def end_at(self, *document_fields_or_snapshot) -> 'FireQuery[SchemaT]':
         """
         End query results at a cursor position (inclusive).
 
@@ -272,7 +274,7 @@ class FireQuery:
         new_query = self._query.end_at(*document_fields_or_snapshot)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def end_before(self, *document_fields_or_snapshot) -> 'FireQuery':
+    def end_before(self, *document_fields_or_snapshot) -> 'FireQuery[SchemaT]':
         """
         End query results before a cursor position (exclusive).
 
@@ -300,7 +302,7 @@ class FireQuery:
         new_query = self._query.end_before(*document_fields_or_snapshot)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def select(self, *field_paths: str) -> 'FireQuery':
+    def select(self, *field_paths: str) -> 'FireQuery[Any]':
         """
         Select specific fields to return (projection).
 
@@ -706,13 +708,21 @@ class FireQuery:
         from .state import State
 
         result = {}
+        schema_type = None
+        schema_metadata = None
+        if self._parent_collection is not None:
+            schema_type = self._parent_collection.schema
+            schema_metadata = self._parent_collection.schema_metadata
+
         for key, value in data.items():
             if isinstance(value, DocumentReference):
                 # Convert DocumentReference to FireObject in ATTACHED state
                 result[key] = FireObject(
                     doc_ref=value,
                     initial_state=State.ATTACHED,
-                    parent_collection=self._parent_collection
+                    parent_collection=self._parent_collection,
+                    schema_type=schema_type,
+                    schema_metadata=schema_metadata,
                 )
             elif isinstance(value, list):
                 # Recursively process lists
@@ -720,7 +730,9 @@ class FireQuery:
                     FireObject(
                         doc_ref=item,
                         initial_state=State.ATTACHED,
-                        parent_collection=self._parent_collection
+                        parent_collection=self._parent_collection,
+                        schema_type=schema_type,
+                        schema_metadata=schema_metadata,
                     ) if isinstance(item, DocumentReference)
                     else self._convert_projection_data(item) if isinstance(item, dict)
                     else item
@@ -738,7 +750,7 @@ class FireQuery:
     # Query Execution Methods
     # =========================================================================
 
-    def get(self) -> Union[List[FireObject], List[Dict[str, Any]]]:
+    def get(self) -> Union[List['TypedFireObject[SchemaT]'], List[Dict[str, Any]]]:
         """
         Execute the query and return results as a list.
 
@@ -785,9 +797,12 @@ class FireQuery:
             return results
 
         # Otherwise, return FireObjects as usual
-        return [FireObject.from_snapshot(snap, self._parent_collection) for snap in snapshots]
+        return [
+            cast('TypedFireObject[SchemaT]', FireObject.from_snapshot(snap, self._parent_collection))
+            for snap in snapshots
+        ]
 
-    def stream(self) -> Union[Iterator[FireObject], Iterator[Dict[str, Any]]]:
+    def stream(self) -> Union[Iterator['TypedFireObject[SchemaT]'], Iterator[Dict[str, Any]]]:
         """
         Execute the query and stream results as an iterator.
 
@@ -829,7 +844,10 @@ class FireQuery:
         else:
             # Otherwise, stream FireObjects as usual
             for snapshot in self._query.stream():
-                yield FireObject.from_snapshot(snapshot, self._parent_collection)
+                yield cast(
+                    'TypedFireObject[SchemaT]',
+                    FireObject.from_snapshot(snapshot, self._parent_collection),
+                )
 
     # =========================================================================
     # Real-Time Listeners (Sync-only)

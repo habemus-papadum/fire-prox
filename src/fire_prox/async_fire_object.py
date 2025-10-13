@@ -1,11 +1,8 @@
-"""
-AsyncFireObject: Async version of FireObject for AsyncClient.
+"""Asynchronous document proxy with optional schema typing."""
 
-This module implements the asynchronous FireObject class for use with
-google.cloud.firestore.AsyncClient.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generic, Optional, TypeVar
 
 from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
@@ -14,8 +11,10 @@ from google.cloud.firestore_v1.document import DocumentSnapshot
 from .base_fire_object import BaseFireObject
 from .state import State
 
+SchemaT = TypeVar("SchemaT")
 
-class AsyncFireObject(BaseFireObject):
+
+class AsyncFireObject(BaseFireObject[SchemaT], Generic[SchemaT]):
     """
     Asynchronous schemaless, state-aware proxy for a Firestore document.
 
@@ -185,7 +184,7 @@ class AsyncFireObject(BaseFireObject):
     # Async Lifecycle Methods
     # =========================================================================
 
-    async def fetch(self, force: bool = False, transaction: Optional[Any] = None) -> 'AsyncFireObject':
+    async def fetch(self, force: bool = False, transaction: Optional[Any] = None) -> 'AsyncFireObject[SchemaT]':
         """
         Fetch document data from Firestore asynchronously.
 
@@ -231,7 +230,7 @@ class AsyncFireObject(BaseFireObject):
         doc_id: Optional[str] = None,
         transaction: Optional[Any] = None,
         batch: Optional[Any] = None,
-    ) -> 'AsyncFireObject':
+    ) -> 'AsyncFireObject[SchemaT]':
         """
         Save the object's data to Firestore asynchronously.
 
@@ -337,11 +336,11 @@ class AsyncFireObject(BaseFireObject):
 
     @classmethod
     def from_snapshot(
-        cls,
+        cls: type['AsyncFireObject[Any]'],
         snapshot: DocumentSnapshot,
         parent_collection: Optional[Any] = None,
         sync_client: Optional[Any] = None
-    ) -> 'AsyncFireObject':
+    ) -> 'AsyncFireObject[Any]':
         """
         Create an AsyncFireObject from a DocumentSnapshot.
 
@@ -366,7 +365,9 @@ class AsyncFireObject(BaseFireObject):
             doc_ref=init_data['doc_ref'],
             initial_state=init_data['initial_state'],
             parent_collection=init_data['parent_collection'],
-            sync_client=sync_client
+            sync_client=sync_client,
+            schema_type=init_data.get('schema_type'),
+            schema_metadata=init_data.get('schema_metadata'),
         )
 
         object.__setattr__(obj, '_data', init_data['data'])

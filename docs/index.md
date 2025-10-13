@@ -98,6 +98,38 @@ user.save()  # Only 2 fields sent to Firestore, not entire document
 
 **Demo**: [Phase 2 Features](/demos/phase2/demo/)
 
+#### Post-Hoc Schema Typing
+Opt in to stronger static types once a collection stabilizes by attaching a dataclass schema:
+
+```python
+from dataclasses import dataclass
+from fire_prox import DocRef
+
+@dataclass
+class UserProfile:
+    display_name: str
+    age: int
+
+@dataclass
+class Order:
+    purchaser: DocRef[UserProfile]
+    total: float
+
+users = db.collection("users").with_schema(UserProfile)
+orders = db.collection("orders").with_schema(Order)
+
+order_doc = orders.new()
+order = order_doc.schema_view()  # IDE hints reflect the dataclass fields
+order.purchaser = users.doc("ada")._doc_ref  # treated as DocRef[UserProfile]
+order.total = 199.00
+order_doc.save()
+```
+
+- `with_schema()` binds a dataclass to a collection without changing runtime behaviour.
+- `DocRef[T]` marks fields that should hold Firestore references for static analyzers.
+- `.schema_view()` offers a strongly typed view for IDEs while retaining FireObject lifecycle methods.
+- Static typing fixtures in the test suite run Pyright to guarantee the metadata stays healthy.
+
 #### Atomic Operations
 Concurrency-safe operations that execute server-side without read-modify-write conflicts:
 

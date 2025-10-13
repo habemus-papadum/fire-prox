@@ -1,12 +1,8 @@
-"""
-AsyncFireQuery: Chainable query builder for Firestore (asynchronous).
+"""Asynchronous query wrapper that preserves optional schema typing."""
 
-This module provides the asynchronous AsyncFireQuery class, which wraps native
-Firestore AsyncQuery objects and provides a chainable interface for building and
-executing async queries.
-"""
+from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Generic, List, Optional, TypeVar, Union, cast
 
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.async_query import AsyncQuery
@@ -14,9 +10,15 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.document import DocumentReference
 
 from .async_fire_object import AsyncFireObject
+from .base_fire_collection import BaseFireCollection
+
+SchemaT = TypeVar("SchemaT", covariant=True)
+
+if TYPE_CHECKING:
+    from .typing_aliases import TypedAsyncFireObject
 
 
-class AsyncFireQuery:
+class AsyncFireQuery(Generic[SchemaT]):
     """
     A chainable query builder for Firestore collections (asynchronous).
 
@@ -59,7 +61,7 @@ class AsyncFireQuery:
     def __init__(
         self,
         native_query: AsyncQuery,
-        parent_collection: Optional[Any] = None,
+        parent_collection: Optional[BaseFireCollection[SchemaT]] = None,
         projection: Optional[tuple] = None,
     ):
         """
@@ -78,7 +80,7 @@ class AsyncFireQuery:
     # Query Building Methods (Immutable Pattern)
     # =========================================================================
 
-    def where(self, field: str, op: str, value: Any) -> 'AsyncFireQuery':
+    def where(self, field: str, op: str, value: Any) -> 'AsyncFireQuery[SchemaT]':
         """
         Add a filter condition to the query.
 
@@ -114,7 +116,7 @@ class AsyncFireQuery:
         new_query = self._query.where(filter=filter_obj)
         return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
-    def order_by(self, field: str, direction: str = 'ASCENDING') -> 'AsyncFireQuery':
+    def order_by(self, field: str, direction: str = 'ASCENDING') -> 'AsyncFireQuery[SchemaT]':
         """
         Add an ordering clause to the query.
 
@@ -153,7 +155,7 @@ class AsyncFireQuery:
         new_query = self._query.order_by(field, direction=direction_const)
         return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
-    def limit(self, count: int) -> 'AsyncFireQuery':
+    def limit(self, count: int) -> 'AsyncFireQuery[SchemaT]':
         """
         Limit the number of results returned.
 
@@ -181,7 +183,7 @@ class AsyncFireQuery:
         new_query = self._query.limit(count)
         return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
-    def start_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
+    def start_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery[SchemaT]':
         """
         Start query results at a cursor position (inclusive).
 
@@ -215,7 +217,7 @@ class AsyncFireQuery:
         new_query = self._query.start_at(*document_fields_or_snapshot)
         return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
-    def start_after(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
+    def start_after(self, *document_fields_or_snapshot) -> 'AsyncFireQuery[SchemaT]':
         """
         Start query results after a cursor position (exclusive).
 
@@ -246,7 +248,7 @@ class AsyncFireQuery:
         new_query = self._query.start_after(*document_fields_or_snapshot)
         return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
-    def end_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
+    def end_at(self, *document_fields_or_snapshot) -> 'AsyncFireQuery[SchemaT]':
         """
         End query results at a cursor position (inclusive).
 
@@ -274,7 +276,7 @@ class AsyncFireQuery:
         new_query = self._query.end_at(*document_fields_or_snapshot)
         return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
-    def end_before(self, *document_fields_or_snapshot) -> 'AsyncFireQuery':
+    def end_before(self, *document_fields_or_snapshot) -> 'AsyncFireQuery[SchemaT]':
         """
         End query results before a cursor position (exclusive).
 
@@ -302,7 +304,7 @@ class AsyncFireQuery:
         new_query = self._query.end_before(*document_fields_or_snapshot)
         return AsyncFireQuery(new_query, self._parent_collection, self._projection)
 
-    def select(self, *field_paths: str) -> 'AsyncFireQuery':
+    def select(self, *field_paths: str) -> 'AsyncFireQuery[Any]':
         """
         Select specific fields to return (projection).
 
@@ -367,7 +369,7 @@ class AsyncFireQuery:
         distance_measure: Any,
         limit: int,
         distance_result_field: Optional[str] = None,
-    ) -> 'AsyncFireQuery':
+    ) -> 'AsyncFireQuery[SchemaT]':
         """
         Find the nearest neighbors based on vector similarity.
 
@@ -712,13 +714,21 @@ class AsyncFireQuery:
         from .state import State
 
         result = {}
+        schema_type = None
+        schema_metadata = None
+        if self._parent_collection is not None:
+            schema_type = self._parent_collection.schema
+            schema_metadata = self._parent_collection.schema_metadata
+
         for key, value in data.items():
             if isinstance(value, (DocumentReference, AsyncDocumentReference)):
                 # Convert DocumentReference/AsyncDocumentReference to AsyncFireObject in ATTACHED state
                 result[key] = AsyncFireObject(
                     doc_ref=value,
                     initial_state=State.ATTACHED,
-                    parent_collection=self._parent_collection
+                    parent_collection=self._parent_collection,
+                    schema_type=schema_type,
+                    schema_metadata=schema_metadata,
                 )
             elif isinstance(value, list):
                 # Recursively process lists
@@ -726,7 +736,9 @@ class AsyncFireQuery:
                     AsyncFireObject(
                         doc_ref=item,
                         initial_state=State.ATTACHED,
-                        parent_collection=self._parent_collection
+                        parent_collection=self._parent_collection,
+                        schema_type=schema_type,
+                        schema_metadata=schema_metadata,
                     ) if isinstance(item, (DocumentReference, AsyncDocumentReference))
                     else self._convert_projection_data(item) if isinstance(item, dict)
                     else item
@@ -744,7 +756,7 @@ class AsyncFireQuery:
     # Query Execution Methods
     # =========================================================================
 
-    async def get(self) -> Union[List[AsyncFireObject], List[Dict[str, Any]]]:
+    async def get(self) -> Union[List['TypedAsyncFireObject[SchemaT]'], List[Dict[str, Any]]]:
         """
         Execute the query and return results as a list.
 
@@ -779,7 +791,7 @@ class AsyncFireQuery:
                 print("No users found")
         """
         # Execute query
-        results = []
+        results: List[Any] = []
 
         # If projection is active, return vanilla dictionaries
         if self._projection:
@@ -791,12 +803,13 @@ class AsyncFireQuery:
             return results
 
         # Otherwise, return AsyncFireObjects as usual
+        typed_results: List['TypedAsyncFireObject[SchemaT]'] = []
         async for snapshot in self._query.stream():
             obj = AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
-            results.append(obj)
-        return results
+            typed_results.append(cast('TypedAsyncFireObject[SchemaT]', obj))
+        return typed_results
 
-    async def stream(self) -> Union[AsyncIterator[AsyncFireObject], AsyncIterator[Dict[str, Any]]]:
+    async def stream(self) -> Union[AsyncIterator['TypedAsyncFireObject[SchemaT]'], AsyncIterator[Dict[str, Any]]]:
         """
         Execute the query and stream results as an async iterator.
 
@@ -838,7 +851,10 @@ class AsyncFireQuery:
         else:
             # Otherwise, stream AsyncFireObjects as usual
             async for snapshot in self._query.stream():
-                yield AsyncFireObject.from_snapshot(snapshot, self._parent_collection)
+                yield cast(
+                    'TypedAsyncFireObject[SchemaT]',
+                    AsyncFireObject.from_snapshot(snapshot, self._parent_collection),
+                )
 
     # =========================================================================
     # Real-Time Listeners (Sync-only via sync_client)

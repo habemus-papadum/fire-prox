@@ -1,11 +1,8 @@
-"""
-BaseFireObject: Shared logic for sync and async FireObject implementations.
+"""Shared logic for synchronous and asynchronous FireObject implementations."""
 
-This module contains the base class that implements all logic that is
-identical between synchronous and asynchronous FireObject implementations.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Generic, Optional, Set, TypeVar, cast
 
 from google.cloud import firestore
 from google.cloud.exceptions import NotFound
@@ -13,9 +10,12 @@ from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 
 from .state import State
+from .schema import SchemaMetadata
+
+SchemaT = TypeVar("SchemaT")
 
 
-class BaseFireObject:
+class BaseFireObject(Generic[SchemaT]):
     """
     Base class for FireObject implementations (sync and async).
 
@@ -37,7 +37,8 @@ class BaseFireObject:
     # Class-level constants for internal attribute names
     _INTERNAL_ATTRS = {
         '_doc_ref', '_sync_doc_ref', '_sync_client', '_data', '_state', '_dirty_fields',
-        '_deleted_fields', '_atomic_ops', '_parent_collection', '_client', '_id', '_path'
+        '_deleted_fields', '_atomic_ops', '_parent_collection', '_client', '_id', '_path',
+        '_schema_type', '_schema_metadata'
     }
 
     def __init__(
@@ -46,7 +47,9 @@ class BaseFireObject:
         initial_state: Optional[State] = None,
         parent_collection: Optional[Any] = None,
         sync_doc_ref: Optional[DocumentReference] = None,
-        sync_client: Optional[Any] = None
+        sync_client: Optional[Any] = None,
+        schema_type: Optional[type[SchemaT]] = None,
+        schema_metadata: Optional[SchemaMetadata] = None,
     ):
         """
         Initialize a FireObject.
@@ -66,6 +69,8 @@ class BaseFireObject:
         object.__setattr__(self, '_sync_client', sync_client)
         object.__setattr__(self, '_data', {})
         object.__setattr__(self, '_parent_collection', parent_collection)
+        object.__setattr__(self, '_schema_type', schema_type)
+        object.__setattr__(self, '_schema_metadata', schema_metadata)
 
         # Determine initial state
         if initial_state is not None:
@@ -1003,9 +1008,34 @@ class BaseFireObject:
         for key, value in data.items():
             converted_data[key] = cls._convert_snapshot_value_for_retrieval(value, is_async, sync_client)
 
+        schema_type = None
+        schema_metadata = None
+        if parent_collection is not None:
+            schema_type = getattr(parent_collection, 'schema', None)
+            schema_metadata = getattr(parent_collection, 'schema_metadata', None)
+
         return {
             'doc_ref': snapshot.reference,
             'initial_state': State.LOADED,
             'parent_collection': parent_collection,
+            'schema_type': schema_type,
+            'schema_metadata': schema_metadata,
             'data': converted_data
         }
+    @property
+    def schema(self) -> Optional[type[SchemaT]]:
+        """Return the dataclass schema associated with this object, if any."""
+
+        return getattr(self, '_schema_type', None)
+
+    @property
+    def schema_metadata(self) -> Optional[SchemaMetadata]:
+        """Return cached schema metadata, if available."""
+
+        return getattr(self, '_schema_metadata', None)
+
+    def schema_view(self) -> SchemaT:
+        """Return a view of this object typed as the bound schema."""
+
+        return cast(SchemaT, self)
+

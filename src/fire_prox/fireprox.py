@@ -1,9 +1,6 @@
-"""
-FireProx: Main entry point for the library (synchronous).
+"""Synchronous entry point for Fire-Prox with optional schema typing."""
 
-This module provides the synchronous FireProx class, which serves as the primary
-interface for users to interact with Firestore through the simplified FireProx API.
-"""
+from typing import Any
 
 from google.cloud.firestore import Client as FirestoreClient
 
@@ -148,7 +145,7 @@ class FireProx(BaseFireProx):
     # Collection Access
     # =========================================================================
 
-    def collection(self, path: str) -> FireCollection:
+    def collection(self, path: str) -> FireCollection[Any]:
         """
         Get a reference to a collection by its path.
 

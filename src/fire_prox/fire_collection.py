@@ -1,22 +1,22 @@
-"""
-FireCollection: Interface for working with Firestore collections (synchronous).
+"""Synchronous collection wrapper with optional schema typing."""
 
-This module provides the synchronous FireCollection class, which represents a
-Firestore collection and provides methods for creating new documents and
-querying existing ones.
-"""
+from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Generic, Iterator, Optional, TypeVar, cast
 
 from .base_fire_collection import BaseFireCollection
 from .fire_object import FireObject
+from .schema import SchemaMetadata
 from .state import State
+
+SchemaT = TypeVar("SchemaT", covariant=True)
 
 if TYPE_CHECKING:
     from .fire_query import FireQuery
+    from .typing_aliases import TypedFireObject
 
 
-class FireCollection(BaseFireCollection):
+class FireCollection(BaseFireCollection[SchemaT], Generic[SchemaT]):
     """
     A wrapper around Firestore CollectionReference for document management (synchronous).
 
@@ -57,22 +57,31 @@ class FireCollection(BaseFireCollection):
         doc_ref: Any,
         initial_state: State,
         parent_collection: 'FireCollection',
+        schema_type: Optional[type[SchemaT]] = None,
+        schema_metadata: Optional[SchemaMetadata] = None,
         **_: Any,
-    ) -> FireObject:
+    ) -> FireObject[SchemaT]:
         """Instantiate the synchronous FireObject wrapper."""
         return FireObject(
             doc_ref=doc_ref,
             initial_state=initial_state,
             parent_collection=parent_collection,
+            schema_type=schema_type,
+            schema_metadata=schema_metadata,
         )
 
-    def new(self) -> FireObject:
+    def new(self) -> 'TypedFireObject[SchemaT]':
         """Create a new FireObject in DETACHED state."""
-        return super().new()
+        return cast('TypedFireObject[SchemaT]', super().new())
 
-    def doc(self, doc_id: str) -> FireObject:
+    def doc(self, doc_id: str) -> 'TypedFireObject[SchemaT]':
         """Get a reference to a specific document in this collection."""
-        return super().doc(doc_id)
+        return cast('TypedFireObject[SchemaT]', super().doc(doc_id))
+
+    def with_schema(self, schema: type[SchemaT]) -> 'FireCollection[SchemaT]':
+        """Return a typed view of this collection."""
+
+        return cast('FireCollection[SchemaT]', super().with_schema(schema))
 
     # =========================================================================
     # Parent Property (Phase 2)
@@ -102,7 +111,7 @@ class FireCollection(BaseFireCollection):
     # Query Methods (Phase 2)
     # =========================================================================
 
-    def where(self, field: str, op: str, value: Any) -> 'FireQuery':
+    def where(self, field: str, op: str, value: Any) -> 'FireQuery[SchemaT]':
         """
         Create a query with a filter condition.
 
@@ -139,7 +148,7 @@ class FireCollection(BaseFireCollection):
         self,
         field: str,
         direction: str = 'ASCENDING'
-    ) -> 'FireQuery':
+    ) -> 'FireQuery[SchemaT]':
         """
         Create a query with ordering.
 
@@ -168,7 +177,7 @@ class FireCollection(BaseFireCollection):
         native_query = self._collection_ref.order_by(field, direction=direction_const)
         return FireQuery(native_query, parent_collection=self)
 
-    def limit(self, count: int) -> 'FireQuery':
+    def limit(self, count: int) -> 'FireQuery[SchemaT]':
         """
         Create a query with a result limit.
 
@@ -189,7 +198,7 @@ class FireCollection(BaseFireCollection):
         native_query = self._collection_ref.limit(count)
         return FireQuery(native_query, parent_collection=self)
 
-    def select(self, *field_paths: str) -> 'FireQuery':
+    def select(self, *field_paths: str) -> 'FireQuery[Any]':
         """
         Create a query with field projection.
 

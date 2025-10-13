@@ -1,16 +1,16 @@
-"""
-BaseFireCollection: Shared logic for sync and async FireCollection implementations.
+"""Shared collection logic used by sync and async implementations."""
 
-This module contains the base class that implements all logic that is
-identical between synchronous and asynchronous FireCollection implementations.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generic, Optional, TypeVar, cast
 
 from .state import State
+from .schema import SchemaMetadata, analyze_dataclass_schema
+
+SchemaT = TypeVar("SchemaT", covariant=True)
 
 
-class BaseFireCollection:
+class BaseFireCollection(Generic[SchemaT]):
     """
     Base class for FireCollection implementations (sync and async).
 
@@ -28,7 +28,9 @@ class BaseFireCollection:
         self,
         collection_ref: Any,  # CollectionReference or AsyncCollectionReference
         client: Optional[Any] = None,
-        sync_client: Optional[Any] = None
+        sync_client: Optional[Any] = None,
+        schema: Optional[type[SchemaT]] = None,
+        schema_metadata: Optional[SchemaMetadata] = None,
     ):
         """
         Initialize a FireCollection.
@@ -42,6 +44,13 @@ class BaseFireCollection:
         self._collection_ref = collection_ref
         self._client = client
         self._sync_client = sync_client
+        self._schema_type: Optional[type[SchemaT]] = schema
+        if schema_metadata is not None:
+            self._schema_metadata = schema_metadata
+        elif schema is not None:
+            self._schema_metadata = analyze_dataclass_schema(schema)
+        else:
+            self._schema_metadata = None
 
     # =========================================================================
     # Document Factories (SHARED)
@@ -60,11 +69,17 @@ class BaseFireCollection:
 
     def _get_new_kwargs(self) -> Dict[str, Any]:
         """Return extra kwargs for instantiating DETACHED objects."""
-        return {}
+        return {
+            'schema_type': self._schema_type,
+            'schema_metadata': self._schema_metadata,
+        }
 
     def _get_doc_kwargs(self, doc_id: str) -> Dict[str, Any]:
         """Return extra kwargs for instantiating ATTACHED objects."""
-        return {}
+        return {
+            'schema_type': self._schema_type,
+            'schema_metadata': self._schema_metadata,
+        }
 
     def new(self) -> Any:
         """Create a new document proxy in DETACHED state."""
@@ -84,6 +99,35 @@ class BaseFireCollection:
             parent_collection=self,
             **self._get_doc_kwargs(doc_id),
         )
+
+    # =========================================================================
+    # Schema Binding
+    # =========================================================================
+
+    def with_schema(self, schema: type[SchemaT]) -> 'BaseFireCollection[SchemaT]':
+        """Return a new collection instance bound to the provided schema."""
+
+        metadata = analyze_dataclass_schema(schema)
+        clone = type(self)(
+            collection_ref=self._collection_ref,
+            client=self._client,
+            sync_client=self._sync_client,
+            schema=schema,
+            schema_metadata=metadata,
+        )
+        return cast('BaseFireCollection[SchemaT]', clone)
+
+    @property
+    def schema(self) -> Optional[type[SchemaT]]:
+        """Return the dataclass schema bound to this collection, if any."""
+
+        return self._schema_type
+
+    @property
+    def schema_metadata(self) -> Optional[SchemaMetadata]:
+        """Return cached schema metadata for static typing helpers."""
+
+        return getattr(self, '_schema_metadata', None)
 
     # =========================================================================
     # Transaction Support (SHARED)
