@@ -11,7 +11,6 @@ from google.cloud import firestore
 from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
-from google.cloud.firestore_v1.vector import Vector
 
 from .state import State
 
@@ -206,11 +205,6 @@ class BaseFireObject:
         sync_client: Optional[Any],
     ) -> Any:
         """Convert stored values into user-facing objects on demand."""
-        if isinstance(value, Vector):
-            from .fire_vector import FireVector
-
-            return FireVector.from_firestore_vector(value)
-
         if isinstance(value, (DocumentReference, AsyncDocumentReference)):
             return self._convert_snapshot_value_for_retrieval(value, is_async, sync_client)
 
@@ -619,7 +613,7 @@ class BaseFireObject:
                     "or use vanilla modifications exclusively."
                 )
 
-            # Convert special types for storage (FireObject → DocumentReference, FireVector → Vector, etc.)
+            # Convert special types for storage (FireObject → DocumentReference, etc.)
             value = self._convert_value_for_storage(value)
 
             # Store in _data and track in dirty fields
@@ -853,7 +847,6 @@ class BaseFireObject:
 
         Recursively processes values to convert:
         - FireObject/AsyncFireObject → DocumentReference
-        - FireVector → native Vector
         - DocumentReference → pass through (allow raw refs)
         - Lists → recursively process items
         - Dicts → recursively process values
@@ -896,11 +889,6 @@ class BaseFireObject:
             # Convert to DocumentReference
             return value._doc_ref
 
-        # Handle FireVector → native Vector
-        from .fire_vector import FireVector
-        if isinstance(value, FireVector):
-            return value.to_firestore_vector()
-
         # Handle DocumentReference → pass through (allow raw refs)
         if isinstance(value, (DocumentReference, AsyncDocumentReference)):
             return value
@@ -928,7 +916,6 @@ class BaseFireObject:
 
         Recursively processes values to convert:
         - DocumentReference → FireObject/AsyncFireObject (ATTACHED state)
-        - native Vector → FireVector
         - Lists → recursively process items
         - Dicts → recursively process values
 
@@ -967,11 +954,6 @@ class BaseFireObject:
             else:
                 from .fire_object import FireObject
                 return FireObject(doc_ref=value, initial_state=State.ATTACHED)
-
-        # Handle native Vector → FireVector
-        if isinstance(value, Vector):
-            from .fire_vector import FireVector
-            return FireVector.from_firestore_vector(value)
 
         # Handle lists → recursively convert items
         if isinstance(value, list):
@@ -1016,7 +998,7 @@ class BaseFireObject:
         # Detect async context from snapshot reference
         is_async = 'Async' in snapshot.reference.__class__.__name__
 
-        # Convert all values (DocumentReference → FireObject, Vector → FireVector, etc.)
+        # Convert all values (DocumentReference → FireObject, etc.)
         converted_data = {}
         for key, value in data.items():
             converted_data[key] = cls._convert_snapshot_value_for_retrieval(value, is_async, sync_client)
