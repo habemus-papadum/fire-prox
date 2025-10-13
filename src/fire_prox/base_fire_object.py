@@ -1,21 +1,19 @@
-"""
-BaseFireObject: Shared logic for sync and async FireObject implementations.
+"""Shared logic for sync and async FireObject implementations."""
 
-This module contains the base class that implements all logic that is
-identical between synchronous and asynchronous FireObject implementations.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Generic, Optional, Set
 
 from google.cloud import firestore
 from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 
+from ._typing import SchemaT, SchemaT_co, SchemaType
 from .state import State
 
 
-class BaseFireObject:
+class BaseFireObject(Generic[SchemaT_co]):
     """
     Base class for FireObject implementations (sync and async).
 
@@ -37,7 +35,8 @@ class BaseFireObject:
     # Class-level constants for internal attribute names
     _INTERNAL_ATTRS = {
         '_doc_ref', '_sync_doc_ref', '_sync_client', '_data', '_state', '_dirty_fields',
-        '_deleted_fields', '_atomic_ops', '_parent_collection', '_client', '_id', '_path'
+        '_deleted_fields', '_atomic_ops', '_parent_collection', '_client', '_id', '_path',
+        '_schema_type'
     }
 
     def __init__(
@@ -46,7 +45,8 @@ class BaseFireObject:
         initial_state: Optional[State] = None,
         parent_collection: Optional[Any] = None,
         sync_doc_ref: Optional[DocumentReference] = None,
-        sync_client: Optional[Any] = None
+        sync_client: Optional[Any] = None,
+        schema_type: SchemaType[SchemaT_co] | None = None,
     ):
         """
         Initialize a FireObject.
@@ -66,6 +66,7 @@ class BaseFireObject:
         object.__setattr__(self, '_sync_client', sync_client)
         object.__setattr__(self, '_data', {})
         object.__setattr__(self, '_parent_collection', parent_collection)
+        object.__setattr__(self, '_schema_type', schema_type)
 
         # Determine initial state
         if initial_state is not None:
@@ -269,6 +270,11 @@ class BaseFireObject:
         """Get current state of the object."""
         return self._state
 
+    @property
+    def schema_type(self) -> SchemaType[SchemaT_co] | None:
+        """Return the dataclass type associated with this document, if any."""
+        return self._schema_type
+
     def is_detached(self) -> bool:
         """Check if object is in DETACHED state."""
         return self._state == State.DETACHED
@@ -392,7 +398,11 @@ class BaseFireObject:
     # Subcollections (Phase 2)
     # =========================================================================
 
-    def collection(self, name: str) -> Any:
+    def collection(
+        self,
+        name: str,
+        schema: SchemaType[SchemaT] | None = None,
+    ) -> Any:
         """
         Get a subcollection reference for this document.
 
@@ -432,10 +442,11 @@ class BaseFireObject:
             return AsyncFireCollection(
                 subcollection_ref,
                 client=None,  # Will be inferred from ref
-                sync_client=self._sync_client if hasattr(self, '_sync_client') else None
+                sync_client=self._sync_client if hasattr(self, '_sync_client') else None,
+                schema=schema,
             )
         else:
-            return FireCollection(subcollection_ref, client=None)
+            return FireCollection(subcollection_ref, client=None, schema=schema)
 
     # =========================================================================
     # Atomic Operations (Phase 2)
@@ -1007,5 +1018,6 @@ class BaseFireObject:
             'doc_ref': snapshot.reference,
             'initial_state': State.LOADED,
             'parent_collection': parent_collection,
-            'data': converted_data
+            'data': converted_data,
+            'schema_type': getattr(parent_collection, 'schema_type', None),
         }

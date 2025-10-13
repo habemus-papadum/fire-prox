@@ -5,10 +5,11 @@ This module provides the AsyncFireProx class, which serves as the primary interf
 for users to interact with Firestore asynchronously through the FireProx API.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, overload
 
 from google.cloud.firestore import AsyncClient as AsyncFirestoreClient
 
+from ._typing import SchemaT, SchemaType
 from .async_fire_collection import AsyncFireCollection
 from .async_fire_object import AsyncFireObject
 from .base_fireprox import BaseFireProx
@@ -146,7 +147,19 @@ class AsyncFireProx(BaseFireProx):
     # Collection Access
     # =========================================================================
 
-    def collection(self, path: str) -> AsyncFireCollection:
+    @overload
+    def collection(self, path: str) -> AsyncFireCollection[object]:
+        ...
+
+    @overload
+    def collection(self, path: str, schema: SchemaType[SchemaT]) -> AsyncFireCollection[SchemaT]:
+        ...
+
+    def collection(
+        self,
+        path: str,
+        schema: SchemaType[Any] | None = None,
+    ) -> AsyncFireCollection[Any]:
         """
         Get a reference to a collection by its path.
 
@@ -176,7 +189,7 @@ class AsyncFireProx(BaseFireProx):
             new_post.title = 'Analysis Engine'
             await new_post.save()
         """
-        return self._create_collection_proxy(path, AsyncFireCollection)
+        return self._create_collection_proxy(path, AsyncFireCollection, schema=schema)
 
     def _get_document_kwargs(self, path: str) -> Dict[str, Any]:
         sync_doc_ref = self._sync_client.document(path)
