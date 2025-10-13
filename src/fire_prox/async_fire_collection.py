@@ -233,6 +233,69 @@ class AsyncFireCollection(BaseFireCollection):
             yield AsyncFireObject.from_snapshot(snapshot, parent_collection=self)
 
     # =========================================================================
+    # Vector Query Methods
+    # =========================================================================
+
+    def find_nearest(
+        self,
+        vector_field: str,
+        query_vector: Any,
+        distance_measure: Any,
+        limit: int,
+        distance_result_field: Optional[str] = None,
+    ) -> 'AsyncFireQuery':
+        """
+        Find the nearest neighbors based on vector similarity.
+
+        Performs a vector similarity search to find documents with embeddings
+        nearest to the query vector. Requires a single-field vector index on
+        the vector_field.
+
+        Args:
+            vector_field: Name of the field containing vector embeddings.
+            query_vector: Vector to compare against (google.cloud.firestore_v1.vector.Vector).
+            distance_measure: Distance calculation method (DistanceMeasure.EUCLIDEAN,
+                DistanceMeasure.COSINE, or DistanceMeasure.DOT_PRODUCT).
+            limit: Maximum number of nearest neighbors to return (max 1000).
+            distance_result_field: Optional field name to store the calculated distance
+                in the query results.
+
+        Returns:
+            An AsyncFireQuery instance for method chaining and execution.
+
+        Example:
+            from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
+            from google.cloud.firestore_v1.vector import Vector
+
+            collection = db.collection("documents")
+            query = collection.find_nearest(
+                vector_field="embedding",
+                query_vector=Vector([0.1, 0.2, 0.3]),
+                distance_measure=DistanceMeasure.EUCLIDEAN,
+                limit=5
+            )
+            async for doc in query.stream():
+                print(f"{doc.title}: {doc.embedding}")
+
+        Note:
+            - Requires a vector index on the vector_field
+            - Maximum limit is 1000 documents
+            - Can be combined with where() for pre-filtering (requires composite index)
+            - Does not work with Firestore emulator (production only)
+        """
+        from .async_fire_query import AsyncFireQuery
+
+        # Create vector query using native find_nearest
+        native_query = self._collection_ref.find_nearest(
+            vector_field=vector_field,
+            query_vector=query_vector,
+            distance_measure=distance_measure,
+            limit=limit,
+            distance_result_field=distance_result_field,
+        )
+        return AsyncFireQuery(native_query, parent_collection=self)
+
+    # =========================================================================
     # Aggregation Methods (Phase 4 Part 5)
     # =========================================================================
 
