@@ -1,38 +1,35 @@
-import os
+"""Integration-style tests for the Firestore testing utilities."""
 
-from google.cloud import firestore
-
-from fire_prox.testing import (
-    firestore_test_harness,  # noqa: F401 - registered as pytest fixture
-    testing_client,
-)
+from fire_prox.testing import firestore_harness, testing_client
 
 
-def test_fire_prox(firestore_test_harness):
-    os.environ["GRPC_VERBOSITY"] = "NONE"
-    db = testing_client()
+def _list_user_ids(client):
+    """Return the sorted list of user document IDs in the emulator."""
+    return sorted(doc.id for doc in client.collection("users").stream())
 
-    # Add a document to the 'users' collection
-    doc_ref = db.collection("users").document()
-    doc_ref.set(
-        {
-            "name": "Test User",
-            "email": "testuser@example.com",
-            "created": firestore.SERVER_TIMESTAMP,
-        }
-    )
 
-    print(f"Added document with ID: {doc_ref.id}")
+def test_fixture_provides_clean_state(firestore_test_harness):
+    """The pytest fixture should start each test with an empty database."""
+    client = testing_client()
 
-    # query the database
-    query = db.collection("users")
-    results = query.stream()
+    assert _list_user_ids(client) == []
 
-    for doc in results:
-        print(f"Document ID: {doc.id}, Data: {doc.to_dict()}")
+    doc_ref = client.collection("users").document("fixture-user")
+    doc_ref.set({"name": "Fixture User"})
 
-    firestore_test_harness.cleanup()
-    # Verify deletion
-    results = list(db.collection("users").stream())
-    assert len(results) == 0
-    print("All documents deleted successfully.")
+    snapshot = doc_ref.get()
+    assert snapshot.exists
+    assert snapshot.to_dict() == {"name": "Fixture User"}
+
+
+def test_context_manager_cleans_up_documents():
+    """firestore_harness context manager should tear down created documents."""
+    with firestore_harness():
+        client = testing_client()
+        doc_ref = client.collection("users").document("context-user")
+        doc_ref.set({"name": "Context User"})
+        assert _list_user_ids(client) == ["context-user"]
+
+    # After the context exits, the database should be empty again.
+    client = testing_client()
+    assert _list_user_ids(client) == []

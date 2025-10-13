@@ -174,7 +174,11 @@ class TestPhase1Integration:
         """Test path validation."""
         # Valid paths
         user = db.doc('users/test')  # Should not raise
+        assert user.is_attached()
+        assert user.path == 'users/test'
+
         collection = db.collection('users')  # Should not raise
+        assert collection.path == 'users'
 
         # Invalid paths
         with pytest.raises(ValueError):

@@ -113,8 +113,8 @@ class TestFireVectorConversion:
         native_vec = fire_vec.to_firestore_vector()
 
         assert isinstance(native_vec, Vector)
-        # Native Vector should contain our values
-        # (actual verification would need Firestore)
+        map_value = native_vec.to_map_value()
+        assert list(map_value["value"]) == values
 
     def test_from_firestore_vector(self):
         """Test creating FireVector from native Vector."""

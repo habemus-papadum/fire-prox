@@ -184,7 +184,11 @@ class TestAsyncIntegration:
         """Test path validation."""
         # Valid paths
         user = async_db.doc('users/test')  # Should not raise
+        assert user.is_attached()
+        assert user.path == 'users/test'
+
         collection = async_db.collection('users')  # Should not raise
+        assert collection.path == 'users'
 
         # Invalid paths
         with pytest.raises(ValueError):
