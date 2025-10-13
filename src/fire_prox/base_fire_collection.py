@@ -1,16 +1,13 @@
-"""
-BaseFireCollection: Shared logic for sync and async FireCollection implementations.
+"""Shared logic for synchronous and asynchronous collection wrappers."""
 
-This module contains the base class that implements all logic that is
-identical between synchronous and asynchronous FireCollection implementations.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generic, Optional
 
+from ._typing import SchemaT, SchemaT_co, SchemaType
 from .state import State
 
-
-class BaseFireCollection:
+class BaseFireCollection(Generic[SchemaT_co]):
     """
     Base class for FireCollection implementations (sync and async).
 
@@ -28,7 +25,8 @@ class BaseFireCollection:
         self,
         collection_ref: Any,  # CollectionReference or AsyncCollectionReference
         client: Optional[Any] = None,
-        sync_client: Optional[Any] = None
+        sync_client: Optional[Any] = None,
+        schema: SchemaType[SchemaT_co] | None = None,
     ):
         """
         Initialize a FireCollection.
@@ -42,6 +40,7 @@ class BaseFireCollection:
         self._collection_ref = collection_ref
         self._client = client
         self._sync_client = sync_client
+        self._schema_type = schema
 
     # =========================================================================
     # Document Factories (SHARED)
@@ -53,6 +52,7 @@ class BaseFireCollection:
         doc_ref: Any,
         initial_state: State,
         parent_collection: 'BaseFireCollection',
+        schema_type: SchemaType[SchemaT_co] | None,
         **kwargs: Any,
     ) -> Any:
         """Create a collection-backed document instance."""
@@ -72,6 +72,7 @@ class BaseFireCollection:
             doc_ref=None,
             initial_state=State.DETACHED,
             parent_collection=self,
+            schema_type=self._schema_type,
             **self._get_new_kwargs(),
         )
 
@@ -82,7 +83,26 @@ class BaseFireCollection:
             doc_ref=doc_ref,
             initial_state=State.ATTACHED,
             parent_collection=self,
+            schema_type=self._schema_type,
             **self._get_doc_kwargs(doc_id),
+        )
+
+    # =========================================================================
+    # Schema Metadata
+    # =========================================================================
+
+    @property
+    def schema_type(self) -> SchemaType[SchemaT_co] | None:
+        """Return the dataclass schema associated with this collection."""
+        return self._schema_type
+
+    def with_schema(self, schema: SchemaType[SchemaT]) -> 'BaseFireCollection[SchemaT]':
+        """Return a copy of the collection bound to the provided schema."""
+        return type(self)(
+            self._collection_ref,
+            client=self._client,
+            sync_client=self._sync_client,
+            schema=schema,
         )
 
     # =========================================================================
