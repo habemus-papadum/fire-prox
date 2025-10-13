@@ -5,12 +5,9 @@ This module implements the synchronous FireObject class, which serves as a
 schemaless, state-aware proxy for Firestore documents.
 """
 
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
-from google.cloud import firestore
-from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
-from google.cloud.firestore_v1.vector import Vector
 
 from .base_fire_object import BaseFireObject
 from .state import State
@@ -51,6 +48,68 @@ class FireObject(BaseFireObject):
     """
 
     # =========================================================================
+    # Firestore I/O Hooks
+    # =========================================================================
+
+    def _get_snapshot(self, transaction: Optional[Any] = None) -> DocumentSnapshot:
+        """Retrieve a document snapshot using the synchronous client."""
+        if transaction is not None:
+            return self._doc_ref.get(transaction=transaction)
+        return self._doc_ref.get()
+
+    def _create_document(self, doc_id: Optional[str] = None) -> DocumentReference:
+        """Create a new synchronous document reference for DETACHED saves."""
+        if not self._parent_collection:
+            raise ValueError("DETACHED object has no parent collection")
+
+        collection_ref = self._parent_collection._collection_ref
+        if doc_id:
+            doc_ref = collection_ref.document(doc_id)
+        else:
+            doc_ref = collection_ref.document()
+
+        object.__setattr__(self, '_doc_ref', doc_ref)
+        return doc_ref
+
+    def _write_set(
+        self,
+        data: Dict[str, Any],
+        doc_ref: Optional[DocumentReference] = None,
+        transaction: Optional[Any] = None,
+        batch: Optional[Any] = None,
+    ) -> None:
+        """Persist data via a set call on the synchronous client."""
+        target_ref = doc_ref or self._doc_ref
+
+        if transaction is not None:
+            transaction.set(target_ref, data)
+        elif batch is not None:
+            batch.set(target_ref, data)
+        else:
+            target_ref.set(data)
+
+    def _write_update(
+        self,
+        update_dict: Dict[str, Any],
+        transaction: Optional[Any] = None,
+        batch: Optional[Any] = None,
+    ) -> None:
+        """Perform an update operation using the synchronous client."""
+        if transaction is not None:
+            transaction.update(self._doc_ref, update_dict)
+        elif batch is not None:
+            batch.update(self._doc_ref, update_dict)
+        else:
+            self._doc_ref.update(update_dict)
+
+    def _write_delete(self, batch: Optional[Any] = None) -> None:
+        """Delete the document using the synchronous client."""
+        if batch is not None:
+            batch.delete(self._doc_ref)
+        else:
+            self._doc_ref.delete()
+
+    # =========================================================================
     # Dynamic Attribute Handling (Sync-specific for lazy loading)
     # =========================================================================
 
@@ -89,57 +148,7 @@ class FireObject(BaseFireObject):
             # Synchronous fetch for lazy loading
             self.fetch()
 
-        # Check if attribute exists in _data
-        if name in self._data:
-            value = self._data[name]
-
-            # Convert native Vector to FireVector on retrieval
-            if isinstance(value, Vector):
-                from .fire_vector import FireVector
-                fire_vec = FireVector.from_firestore_vector(value)
-                # Cache the converted object
-                self._data[name] = fire_vec
-                return fire_vec
-
-            # Convert DocumentReference to FireObject on retrieval
-            if isinstance(value, DocumentReference):
-                fire_obj = FireObject(doc_ref=value, initial_state=State.ATTACHED)
-                # Cache the converted object so subsequent accesses return the same instance
-                self._data[name] = fire_obj
-                return fire_obj
-
-            # Recursively convert lists containing references
-            if isinstance(value, list):
-                converted_list = [
-                    FireObject(doc_ref=item, initial_state=State.ATTACHED)
-                    if isinstance(item, DocumentReference)
-                    else item
-                    for item in value
-                ]
-                # Cache if any conversions were made
-                if any(isinstance(item, DocumentReference) for item in value):
-                    self._data[name] = converted_list
-                return converted_list
-
-            # Recursively convert dicts containing references
-            if isinstance(value, dict):
-                converted_dict = {
-                    k: (
-                        FireObject(doc_ref=v, initial_state=State.ATTACHED)
-                        if isinstance(v, DocumentReference)
-                        else v
-                    )
-                    for k, v in value.items()
-                }
-                # Cache if any conversions were made
-                if any(isinstance(v, DocumentReference) for v in value.values()):
-                    self._data[name] = converted_dict
-                return converted_dict
-
-            return value
-
-        # Attribute not found
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+        return self._materialize_field(name)
 
     # =========================================================================
     # Core Lifecycle Methods (Sync-specific I/O)
@@ -185,36 +194,20 @@ class FireObject(BaseFireObject):
                 return user.credits
             credits = read_user(transaction)
         """
-        # Validate state
-        self._validate_not_detached("fetch()")
-        self._validate_not_deleted("fetch()")
-
-        # Skip fetch if already LOADED and not forcing
-        if self._state == State.LOADED and not force:
+        if self._should_skip_fetch(force):
             return self
 
-        # Fetch from Firestore (synchronous)
-        # Use transaction if provided, otherwise normal get
-        if transaction is not None:
-            snapshot = self._doc_ref.get(transaction=transaction)
-        else:
-            snapshot = self._doc_ref.get()
-
-        if not snapshot.exists:
-            raise NotFound(f"Document {self._doc_ref.path} does not exist")
-
-        # Get data and convert special types (DocumentReference → FireObject, Vector → FireVector, etc.)
-        data = snapshot.to_dict() or {}
-        converted_data = {}
-        for key, value in data.items():
-            converted_data[key] = self._convert_snapshot_value_for_retrieval(value, is_async=False)
-
-        # Transition to LOADED state with converted data
-        self._transition_to_loaded(converted_data)
+        snapshot = self._get_snapshot(transaction)
+        self._process_snapshot(snapshot, is_async=False)
 
         return self
 
-    def save(self, doc_id: Optional[str] = None, transaction: Optional[Any] = None, batch: Optional[Any] = None) -> 'FireObject':
+    def save(
+        self,
+        doc_id: Optional[str] = None,
+        transaction: Optional[Any] = None,
+        batch: Optional[Any] = None,
+    ) -> 'FireObject':
         """
         Save the object's data to Firestore (synchronous).
 
@@ -267,94 +260,27 @@ class FireObject(BaseFireObject):
             user2.save(batch=batch)
             batch.commit()  # Commit all operations
         """
-        # Check if we're trying to save a DELETED object
         self._validate_not_deleted("save()")
 
-        # Handle DETACHED state - create new document
         if self._state == State.DETACHED:
-            if transaction is not None:
-                raise ValueError(
-                    "Cannot create new documents (DETACHED -> LOADED) within a transaction. "
-                    "Create the document first, then use transactions for updates."
-                )
-
-            if batch is not None:
-                raise ValueError(
-                    "Cannot create new documents (DETACHED -> LOADED) within a batch. "
-                    "Create the document first, then use batches for updates."
-                )
-
-            if not self._parent_collection:
-                raise ValueError("DETACHED object has no parent collection")
-
-            # Get the collection reference
-            collection_ref = self._parent_collection._collection_ref
-
-            # Create document reference (with custom ID or auto-generated)
-            if doc_id:
-                doc_ref = collection_ref.document(doc_id)
-            else:
-                doc_ref = collection_ref.document()
-
-            # Prepare data for storage (convert FireObjects back to DocumentReferences)
-            storage_data = self._prepare_data_for_storage()
-
-            # Save data to Firestore
-            doc_ref.set(storage_data)
-
-            # Update internal state
-            object.__setattr__(self, '_doc_ref', doc_ref)
+            doc_ref, storage_data = self._prepare_detached_save(doc_id, transaction, batch)
+            self._write_set(storage_data, doc_ref=doc_ref)
             object.__setattr__(self, '_state', State.LOADED)
             self._mark_clean()
-
             return self
 
-        # Handle LOADED state - update if dirty
         if self._state == State.LOADED:
-            # Skip if not dirty
             if not self.is_dirty():
                 return self
 
-            # Phase 2: Perform efficient partial update
-            # Build update dict with modified fields
-            update_dict = {}
-
-            # Add modified fields (convert to storage format)
-            for field in self._dirty_fields:
-                update_dict[field] = self._convert_value_for_storage(self._data[field])
-
-            # Add deleted fields with DELETE_FIELD sentinel
-            for field in self._deleted_fields:
-                update_dict[field] = firestore.DELETE_FIELD
-
-            # Add atomic operations (ArrayUnion, ArrayRemove, Increment)
-            for field, operation in self._atomic_ops.items():
-                update_dict[field] = operation
-
-            # Perform partial update with transaction, batch, or direct
-            if transaction is not None:
-                transaction.update(self._doc_ref, update_dict)
-            elif batch is not None:
-                batch.update(self._doc_ref, update_dict)
-            else:
-                self._doc_ref.update(update_dict)
-
-            # Clear dirty tracking
+            update_dict = self._build_update_dict()
+            self._write_update(update_dict, transaction=transaction, batch=batch)
             self._mark_clean()
-
             return self
 
-        # Handle ATTACHED state - set data
         if self._state == State.ATTACHED:
-            # Prepare data for storage (convert FireObjects back to DocumentReferences)
             storage_data = self._prepare_data_for_storage()
-            # For ATTACHED, we can just do a set operation
-            if transaction is not None:
-                transaction.set(self._doc_ref, storage_data)
-            elif batch is not None:
-                batch.set(self._doc_ref, storage_data)
-            else:
-                self._doc_ref.set(storage_data)
+            self._write_set(storage_data, transaction=transaction, batch=batch)
             object.__setattr__(self, '_state', State.LOADED)
             self._mark_clean()
             return self
@@ -393,17 +319,8 @@ class FireObject(BaseFireObject):
             user2.delete(batch=batch)
             batch.commit()  # Commit all operations
         """
-        # Validate state
-        self._validate_not_detached("delete()")
-        self._validate_not_deleted("delete()")
-
-        # Delete from Firestore (synchronous) with or without batch
-        if batch is not None:
-            batch.delete(self._doc_ref)
-        else:
-            self._doc_ref.delete()
-
-        # Transition to DELETED state
+        self._prepare_delete()
+        self._write_delete(batch=batch)
         self._transition_to_deleted()
 
     # =========================================================================

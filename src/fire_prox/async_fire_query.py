@@ -56,7 +56,12 @@ class AsyncFireQuery:
             results = [AsyncFireObject.from_snapshot(snap) async for snap in native_query.stream()]
     """
 
-    def __init__(self, native_query: AsyncQuery, parent_collection: Optional[Any] = None, projection: Optional[tuple] = None):
+    def __init__(
+        self,
+        native_query: AsyncQuery,
+        parent_collection: Optional[Any] = None,
+        projection: Optional[tuple] = None,
+    ):
         """
         Initialize an AsyncFireQuery.
 

@@ -6,11 +6,14 @@ Firestore collection and provides methods for creating new documents and
 querying existing ones.
 """
 
-from typing import Any, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from .base_fire_collection import BaseFireCollection
 from .fire_object import FireObject
 from .state import State
+
+if TYPE_CHECKING:
+    from .fire_query import FireQuery
 
 
 class FireCollection(BaseFireCollection):
@@ -48,55 +51,28 @@ class FireCollection(BaseFireCollection):
     # Document Creation
     # =========================================================================
 
-    def new(self) -> FireObject:
-        """
-        Create a new FireObject in DETACHED state.
-
-        Creates a new FireObject that exists only in memory. The object has
-        no DocumentReference yet and will receive one when save() is called
-        with an optional doc_id or auto-generated ID.
-
-        Returns:
-            A new FireObject instance in DETACHED state.
-
-        Example:
-            users = db.collection('users')
-            user = users.new()  # DETACHED state
-            user.name = 'Ada Lovelace'
-            user.year = 1815
-            user.save(doc_id='alovelace')  # Now LOADED
-        """
-        return FireObject(
-            doc_ref=None,
-            initial_state=State.DETACHED,
-            parent_collection=self
-        )
-
-    def doc(self, doc_id: str) -> FireObject:
-        """
-        Get a reference to a specific document in this collection.
-
-        Creates a FireObject in ATTACHED state pointing to a specific
-        document. No data is fetched until an attribute is accessed
-        (lazy loading).
-
-        Args:
-            doc_id: The document ID within this collection.
-
-        Returns:
-            A new FireObject instance in ATTACHED state.
-
-        Example:
-            users = db.collection('users')
-            user = users.doc('alovelace')  # ATTACHED state
-            print(user.name)  # Triggers fetch, transitions to LOADED
-        """
-        doc_ref = self._collection_ref.document(doc_id)
+    def _instantiate_object(
+        self,
+        *,
+        doc_ref: Any,
+        initial_state: State,
+        parent_collection: 'FireCollection',
+        **_: Any,
+    ) -> FireObject:
+        """Instantiate the synchronous FireObject wrapper."""
         return FireObject(
             doc_ref=doc_ref,
-            initial_state=State.ATTACHED,
-            parent_collection=self
+            initial_state=initial_state,
+            parent_collection=parent_collection,
         )
+
+    def new(self) -> FireObject:
+        """Create a new FireObject in DETACHED state."""
+        return super().new()
+
+    def doc(self, doc_id: str) -> FireObject:
+        """Get a reference to a specific document in this collection."""
+        return super().doc(doc_id)
 
     # =========================================================================
     # Parent Property (Phase 2)

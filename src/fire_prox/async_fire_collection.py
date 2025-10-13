@@ -5,11 +5,14 @@ This module implements the asynchronous FireCollection class for use with
 google.cloud.firestore.AsyncClient.
 """
 
-from typing import Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 
 from .async_fire_object import AsyncFireObject
 from .base_fire_collection import BaseFireCollection
 from .state import State
+
+if TYPE_CHECKING:
+    from .async_fire_query import AsyncFireQuery
 
 
 class AsyncFireCollection(BaseFireCollection):
@@ -44,63 +47,41 @@ class AsyncFireCollection(BaseFireCollection):
     # Document Creation
     # =========================================================================
 
-    def new(self) -> AsyncFireObject:
-        """
-        Create a new AsyncFireObject in DETACHED state.
-
-        Creates a new AsyncFireObject that exists only in memory. The object
-        has no DocumentReference yet and will receive one when save() is called.
-
-        Returns:
-            A new AsyncFireObject instance in DETACHED state.
-
-        Example:
-            users = db.collection('users')
-            user = users.new()  # DETACHED state
-            user.name = 'Ada Lovelace'
-            user.year = 1815
-            await user.save(doc_id='alovelace')  # Now LOADED
-        """
+    def _instantiate_object(
+        self,
+        *,
+        doc_ref: Any,
+        initial_state: State,
+        parent_collection: 'AsyncFireCollection',
+        sync_doc_ref: Optional[Any] = None,
+        sync_client: Optional[Any] = None,
+        **_: Any,
+    ) -> AsyncFireObject:
+        """Instantiate the asynchronous FireObject wrapper."""
         return AsyncFireObject(
-            doc_ref=None,
-            initial_state=State.DETACHED,
-            parent_collection=self,
-            sync_client=self._sync_client
+            doc_ref=doc_ref,
+            sync_doc_ref=sync_doc_ref,
+            sync_client=sync_client,
+            initial_state=initial_state,
+            parent_collection=parent_collection,
         )
+
+    def _get_new_kwargs(self) -> dict[str, Any]:
+        return {'sync_client': self._sync_client}
+
+    def _get_doc_kwargs(self, doc_id: str) -> dict[str, Any]:
+        sync_doc_ref = None
+        if self._sync_client is not None:
+            sync_doc_ref = self._sync_client.collection(self.path).document(doc_id)
+        return {'sync_doc_ref': sync_doc_ref, 'sync_client': self._sync_client}
+
+    def new(self) -> AsyncFireObject:
+        """Create a new AsyncFireObject in DETACHED state."""
+        return super().new()
 
     def doc(self, doc_id: str) -> AsyncFireObject:
-        """
-        Get a reference to a specific document in this collection.
-
-        Creates an AsyncFireObject in ATTACHED state pointing to a specific
-        document. No data is fetched until fetch() is called or an attribute is
-        accessed (lazy loading).
-
-        Args:
-            doc_id: The document ID within this collection.
-
-        Returns:
-            A new AsyncFireObject instance in ATTACHED state.
-
-        Example:
-            users = db.collection('users')
-            user = users.doc('alovelace')  # ATTACHED state
-            print(user.name)  # Triggers automatic fetch (lazy loading)
-        """
-        # Create both async and sync doc refs
-        async_doc_ref = self._collection_ref.document(doc_id)
-        sync_doc_ref = None
-        if self._sync_client:
-            sync_collection_ref = self._sync_client.collection(self.path)
-            sync_doc_ref = sync_collection_ref.document(doc_id)
-
-        return AsyncFireObject(
-            doc_ref=async_doc_ref,
-            sync_doc_ref=sync_doc_ref,
-            sync_client=self._sync_client,
-            initial_state=State.ATTACHED,
-            parent_collection=self
-        )
+        """Get a reference to a specific document in this collection."""
+        return super().doc(doc_id)
 
     # =========================================================================
     # Properties (inherited from BaseFireCollection)

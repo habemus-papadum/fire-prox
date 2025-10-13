@@ -7,6 +7,8 @@ identical between synchronous and asynchronous FireObject implementations.
 
 from typing import Any, Dict, Optional, Set
 
+from google.cloud import firestore
+from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 from google.cloud.firestore_v1.vector import Vector
@@ -82,6 +84,187 @@ class BaseFireObject:
         # Atomic operations tracking (Phase 2)
         # Store atomic operations (ArrayUnion, ArrayRemove, Increment) to apply on save
         object.__setattr__(self, '_atomic_ops', {})
+
+    # =========================================================================
+    # Firestore I/O Hooks (to be implemented by subclasses)
+    # =========================================================================
+
+    def _get_snapshot(self, transaction: Optional[Any] = None) -> Any:
+        """Retrieve the latest document snapshot from Firestore."""
+        raise NotImplementedError
+
+    def _create_document(self, doc_id: Optional[str] = None) -> Any:
+        """Create a new document reference for DETACHED objects."""
+        raise NotImplementedError
+
+    def _write_set(
+        self,
+        data: Dict[str, Any],
+        doc_ref: Optional[Any] = None,
+        transaction: Optional[Any] = None,
+        batch: Optional[Any] = None,
+    ) -> Any:
+        """Persist data via a set/overwrite operation."""
+        raise NotImplementedError
+
+    def _write_update(
+        self,
+        update_dict: Dict[str, Any],
+        transaction: Optional[Any] = None,
+        batch: Optional[Any] = None,
+    ) -> Any:
+        """Persist data via an update/patch operation."""
+        raise NotImplementedError
+
+    def _write_delete(self, batch: Optional[Any] = None) -> Any:
+        """Delete the document from Firestore."""
+        raise NotImplementedError
+
+    # =========================================================================
+    # Shared lifecycle helpers
+    # =========================================================================
+
+    def _should_skip_fetch(self, force: bool) -> bool:
+        """Return True if a fetch can be skipped based on current state."""
+        self._validate_not_detached("fetch()")
+        self._validate_not_deleted("fetch()")
+        return self._state == State.LOADED and not force
+
+    def _process_snapshot(self, snapshot: DocumentSnapshot, *, is_async: bool) -> None:
+        """Populate internal state from a Firestore snapshot."""
+        if not snapshot.exists:
+            raise NotFound(f"Document {self._doc_ref.path} does not exist")
+
+        data = snapshot.to_dict() or {}
+
+        sync_client: Optional[Any] = None
+        if is_async:
+            if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref is not None:
+                sync_client = self._sync_doc_ref._client
+            elif getattr(self, '_sync_client', None) is not None:
+                sync_client = self._sync_client
+
+        converted_data: Dict[str, Any] = {}
+        for key, value in data.items():
+            converted_data[key] = self._convert_snapshot_value_for_retrieval(
+                value,
+                is_async,
+                sync_client,
+            )
+
+        self._transition_to_loaded(converted_data)
+
+    def _prepare_detached_save(
+        self,
+        doc_id: Optional[str],
+        transaction: Optional[Any],
+        batch: Optional[Any],
+    ) -> tuple[Any, Dict[str, Any]]:
+        """Validate and prepare data for saving a DETACHED object."""
+        if transaction is not None:
+            raise ValueError(
+                "Cannot create new documents (DETACHED -> LOADED) within a transaction. "
+                "Create the document first, then use transactions for updates."
+            )
+
+        if batch is not None:
+            raise ValueError(
+                "Cannot create new documents (DETACHED -> LOADED) within a batch. "
+                "Create the document first, then use batches for updates."
+            )
+
+        doc_ref = self._create_document(doc_id)
+        storage_data = self._prepare_data_for_storage()
+        return doc_ref, storage_data
+
+    def _build_update_dict(self) -> Dict[str, Any]:
+        """Create the payload for partial updates on LOADED objects."""
+        update_dict: Dict[str, Any] = {}
+
+        for field in self._dirty_fields:
+            update_dict[field] = self._convert_value_for_storage(self._data[field])
+
+        for field in self._deleted_fields:
+            update_dict[field] = firestore.DELETE_FIELD
+
+        for field, operation in self._atomic_ops.items():
+            update_dict[field] = operation
+
+        return update_dict
+
+    def _get_sync_client_for_async(self) -> Optional[Any]:
+        """Return the sync client to support async materialization."""
+        if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref is not None:
+            return self._sync_doc_ref._client
+        return getattr(self, '_sync_client', None)
+
+    def _materialize_value(
+        self,
+        value: Any,
+        *,
+        is_async: bool,
+        sync_client: Optional[Any],
+    ) -> Any:
+        """Convert stored values into user-facing objects on demand."""
+        if isinstance(value, Vector):
+            from .fire_vector import FireVector
+
+            return FireVector.from_firestore_vector(value)
+
+        if isinstance(value, (DocumentReference, AsyncDocumentReference)):
+            return self._convert_snapshot_value_for_retrieval(value, is_async, sync_client)
+
+        if isinstance(value, list):
+            changed = False
+            converted_items = []
+            for item in value:
+                converted_item = self._materialize_value(
+                    item,
+                    is_async=is_async,
+                    sync_client=sync_client,
+                )
+                if converted_item is not item:
+                    changed = True
+                converted_items.append(converted_item)
+
+            return converted_items if changed else value
+
+        if isinstance(value, dict):
+            changed = False
+            converted_dict: Dict[str, Any] = {}
+            for key, item in value.items():
+                converted_item = self._materialize_value(
+                    item,
+                    is_async=is_async,
+                    sync_client=sync_client,
+                )
+                if converted_item is not item:
+                    changed = True
+                converted_dict[key] = converted_item
+
+            return converted_dict if changed else value
+
+        return value
+
+    def _materialize_field(self, name: str) -> Any:
+        """Return a field value, materializing nested references as needed."""
+        if name not in self._data:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+        is_async = self._is_async_context()
+        sync_client = self._get_sync_client_for_async() if is_async else None
+        value = self._data[name]
+        converted = self._materialize_value(value, is_async=is_async, sync_client=sync_client)
+
+        if converted is not value:
+            self._data[name] = converted
+
+        return self._data[name]
+
+    def _prepare_delete(self) -> None:
+        """Validate delete preconditions before performing I/O."""
+        self._validate_not_detached("delete()")
+        self._validate_not_deleted("delete()")
 
     # =========================================================================
     # State Inspection (SHARED)
@@ -252,11 +435,6 @@ class BaseFireObject:
         # Return appropriate collection type based on client type
         # The concrete class will override this if needed
         if hasattr(self._doc_ref, '__class__') and 'Async' in self._doc_ref.__class__.__name__:
-            # Get sync client if available for async lazy loading
-            sync_collection_ref = None
-            if hasattr(self, '_sync_doc_ref') and self._sync_doc_ref:
-                sync_collection_ref = self._sync_doc_ref.collection(name)
-
             return AsyncFireCollection(
                 subcollection_ref,
                 client=None,  # Will be inferred from ref
@@ -437,7 +615,8 @@ class BaseFireObject:
             if hasattr(self, '_atomic_ops') and name in self._atomic_ops:
                 raise ValueError(
                     f"Cannot modify field '{name}' directly - "
-                    f"field has a pending atomic operation. Save changes first or use vanilla modifications exclusively."
+                    "field has a pending atomic operation. Save changes first "
+                    "or use vanilla modifications exclusively."
                 )
 
             # Convert special types for storage (FireObject → DocumentReference, FireVector → Vector, etc.)

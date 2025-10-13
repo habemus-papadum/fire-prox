@@ -5,12 +5,13 @@ This module provides the AsyncFireProx class, which serves as the primary interf
 for users to interact with Firestore asynchronously through the FireProx API.
 """
 
+from typing import Any, Dict
+
 from google.cloud.firestore import AsyncClient as AsyncFirestoreClient
 
 from .async_fire_collection import AsyncFireCollection
 from .async_fire_object import AsyncFireObject
 from .base_fireprox import BaseFireProx
-from .state import State
 
 
 class AsyncFireProx(BaseFireProx):
@@ -127,18 +128,7 @@ class AsyncFireProx(BaseFireProx):
             post = db.doc('users/alovelace/posts/post123')
             await post.fetch()
         """
-        self._validate_path(path, 'document')
-
-        # Create both async and sync doc refs
-        async_doc_ref = self._client.document(path)
-        sync_doc_ref = self._sync_client.document(path)
-
-        return AsyncFireObject(
-            doc_ref=async_doc_ref,
-            sync_doc_ref=sync_doc_ref,
-            initial_state=State.ATTACHED,
-            parent_collection=None
-        )
+        return self._create_document_proxy(path, AsyncFireObject)
 
     def document(self, path: str) -> AsyncFireObject:
         """
@@ -186,14 +176,13 @@ class AsyncFireProx(BaseFireProx):
             new_post.title = 'Analysis Engine'
             await new_post.save()
         """
-        self._validate_path(path, 'collection')
+        return self._create_collection_proxy(path, AsyncFireCollection)
 
-        collection_ref = self._client.collection(path)
+    def _get_document_kwargs(self, path: str) -> Dict[str, Any]:
+        sync_doc_ref = self._sync_client.document(path)
+        return {'sync_doc_ref': sync_doc_ref, 'sync_client': self._sync_client}
 
-        return AsyncFireCollection(
-            collection_ref=collection_ref,
-            client=self,
-            sync_client=self._sync_client
-        )
+    def _get_collection_kwargs(self, path: str) -> Dict[str, Any]:
+        return {'sync_client': self._sync_client}
 
     # Note: batch() and transaction() methods are inherited from BaseFireProx
