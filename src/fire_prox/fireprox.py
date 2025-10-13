@@ -5,8 +5,11 @@ This module provides the synchronous FireProx class, which serves as the primary
 interface for users to interact with Firestore through the simplified FireProx API.
 """
 
+from typing import Any, overload
+
 from google.cloud.firestore import Client as FirestoreClient
 
+from ._typing import SchemaT, SchemaType
 from .base_fireprox import BaseFireProx
 from .fire_collection import FireCollection
 from .fire_object import FireObject
@@ -148,7 +151,19 @@ class FireProx(BaseFireProx):
     # Collection Access
     # =========================================================================
 
-    def collection(self, path: str) -> FireCollection:
+    @overload
+    def collection(self, path: str) -> FireCollection[object]:
+        ...
+
+    @overload
+    def collection(self, path: str, schema: SchemaType[SchemaT]) -> FireCollection[SchemaT]:
+        ...
+
+    def collection(
+        self,
+        path: str,
+        schema: SchemaType[Any] | None = None,
+    ) -> FireCollection[Any]:
         """
         Get a reference to a collection by its path.
 
@@ -180,6 +195,6 @@ class FireProx(BaseFireProx):
             new_post.title = 'Analysis Engine'
             new_post.save()
         """
-        return self._create_collection_proxy(path, FireCollection)
+        return self._create_collection_proxy(path, FireCollection, schema=schema)
 
     # Note: batch() and transaction() methods are inherited from BaseFireProx

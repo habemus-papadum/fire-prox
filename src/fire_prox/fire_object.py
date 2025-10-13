@@ -1,19 +1,21 @@
-"""
-FireObject: The core proxy class for Firestore documents (synchronous).
+"""Synchronous Firestore document proxy with optional schema metadata."""
 
-This module implements the synchronous FireObject class, which serves as a
-schemaless, state-aware proxy for Firestore documents.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Generic, Optional, cast, overload
 
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 
+from ._typing import SchemaT, SchemaT_co, SchemaType
 from .base_fire_object import BaseFireObject
 from .state import State
 
 
-class FireObject(BaseFireObject):
+if TYPE_CHECKING:
+    from .fire_collection import FireCollection
+
+
+class _FireObjectBase(BaseFireObject[SchemaT_co], Generic[SchemaT_co]):
     """
     A schemaless, state-aware proxy for a Firestore document (synchronous).
 
@@ -109,6 +111,22 @@ class FireObject(BaseFireObject):
         else:
             self._doc_ref.delete()
 
+    @overload
+    def collection(self, name: str) -> 'FireCollection[object]':
+        ...
+
+    @overload
+    def collection(self, name: str, schema: SchemaType[SchemaT]) -> 'FireCollection[SchemaT]':
+        ...
+
+    def collection(
+        self,
+        name: str,
+        schema: SchemaType[SchemaT] | None = None,
+    ) -> 'FireCollection[Any]':
+        """Return a subcollection optionally bound to ``schema``."""
+        return cast('FireCollection[Any]', super().collection(name, schema))
+
     # =========================================================================
     # Dynamic Attribute Handling (Sync-specific for lazy loading)
     # =========================================================================
@@ -154,7 +172,11 @@ class FireObject(BaseFireObject):
     # Core Lifecycle Methods (Sync-specific I/O)
     # =========================================================================
 
-    def fetch(self, force: bool = False, transaction: Optional[Any] = None) -> 'FireObject':
+    def fetch(
+        self,
+        force: bool = False,
+        transaction: Optional[Any] = None,
+    ) -> '_FireObjectBase[SchemaT_co]':
         """
         Fetch document data from Firestore (synchronous).
 
@@ -207,7 +229,7 @@ class FireObject(BaseFireObject):
         doc_id: Optional[str] = None,
         transaction: Optional[Any] = None,
         batch: Optional[Any] = None,
-    ) -> 'FireObject':
+    ) -> '_FireObjectBase[SchemaT_co]':
         """
         Save the object's data to Firestore (synchronous).
 
@@ -332,7 +354,7 @@ class FireObject(BaseFireObject):
         cls,
         snapshot: DocumentSnapshot,
         parent_collection: Optional[Any] = None
-    ) -> 'FireObject':
+    ) -> '_FireObjectBase[SchemaT_co]':
         """
         Create a FireObject from a Firestore DocumentSnapshot.
 
@@ -368,10 +390,19 @@ class FireObject(BaseFireObject):
         obj = cls(
             doc_ref=init_params['doc_ref'],
             initial_state=init_params['initial_state'],
-            parent_collection=init_params['parent_collection']
+            parent_collection=init_params['parent_collection'],
+            schema_type=init_params['schema_type'],
         )
 
         # Populate data from snapshot
         object.__setattr__(obj, '_data', init_params['data'])
 
         return obj
+
+
+if TYPE_CHECKING:
+    class FireObject(_FireObjectBase[SchemaT_co], SchemaT_co, Generic[SchemaT_co]):
+        ...
+else:
+    class FireObject(_FireObjectBase[SchemaT_co], Generic[SchemaT_co]):
+        ...

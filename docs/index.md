@@ -78,6 +78,41 @@ user.metadata = {'verified': True}
 user.save()  # All fields saved automatically
 ```
 
+#### Post-hoc Schemas & Static Typing
+Opt into richer editor and type-checker support when a collection stabilizes:
+
+```python
+from dataclasses import dataclass
+
+from fire_prox import FireCollection, FireObject
+
+
+@dataclass
+class UserProfile:
+    display_name: str
+    age: int
+
+
+@dataclass
+class Order:
+    total_cents: int
+    status: str
+
+
+users: FireCollection[UserProfile] = db.collection("users", UserProfile)
+ada: FireObject[UserProfile] = users.doc("ada")
+ada.display_name = "Ada Lovelace"  # Type-checked
+ada.age += 1
+ada.save()  # Lifecycle helpers remain available
+
+# Subcollections accept the same schema shorthand
+orders: FireCollection[Order] = ada.collection("orders", Order)
+first: FireObject[Order] = orders.doc("order-1")
+```
+
+Static fixtures run through Pyright ensure schema metadata flows across the
+synchronous and asynchronous APIs without changing runtime flexibility.
+
 ### Data Operations
 
 #### Field-Level Dirty Tracking

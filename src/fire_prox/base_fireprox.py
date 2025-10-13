@@ -8,6 +8,7 @@ identical between synchronous and asynchronous FireProx implementations.
 from typing import Any, Dict
 
 from .state import State
+from ._typing import SchemaType
 
 
 class BaseFireProx:
@@ -260,11 +261,21 @@ class BaseFireProx:
         kwargs.update(self._get_document_kwargs(path))
         return factory(**kwargs)
 
-    def _create_collection_proxy(self, path: str, factory: Any) -> Any:
+    def _create_collection_proxy(
+        self,
+        path: str,
+        factory: Any,
+        *,
+        schema: SchemaType[Any] | None = None,
+    ) -> Any:
         """Validate and construct a collection wrapper using the provided factory."""
         self._validate_path(path, 'collection')
         collection_ref = self._client.collection(path)
-        kwargs: Dict[str, Any] = {'collection_ref': collection_ref, 'client': self}
+        kwargs: Dict[str, Any] = {
+            'collection_ref': collection_ref,
+            'client': self,
+            'schema': schema,
+        }
         kwargs.update(self._get_collection_kwargs(path))
         return factory(**kwargs)
 
