@@ -1,21 +1,18 @@
-"""
-FireQuery: Chainable query builder for Firestore (synchronous).
+"""Synchronous query builder that preserves collection schema metadata."""
 
-This module provides the synchronous FireQuery class, which wraps native
-Firestore Query objects and provides a chainable interface for building and
-executing queries.
-"""
+from __future__ import annotations
 
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Generic, Iterator, List, Optional, Union
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.document import DocumentReference
 from google.cloud.firestore_v1.query import Query
 
+from ._typing import SchemaT_co
 from .fire_object import FireObject
 
 
-class FireQuery:
+class FireQuery(Generic[SchemaT_co]):
     """
     A chainable query builder for Firestore collections (synchronous).
 
@@ -76,7 +73,7 @@ class FireQuery:
     # Query Building Methods (Immutable Pattern)
     # =========================================================================
 
-    def where(self, field: str, op: str, value: Any) -> 'FireQuery':
+    def where(self, field: str, op: str, value: Any) -> 'FireQuery[SchemaT_co]':
         """
         Add a filter condition to the query.
 
@@ -112,7 +109,7 @@ class FireQuery:
         new_query = self._query.where(filter=filter_obj)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def order_by(self, field: str, direction: str = 'ASCENDING') -> 'FireQuery':
+    def order_by(self, field: str, direction: str = 'ASCENDING') -> 'FireQuery[SchemaT_co]':
         """
         Add an ordering clause to the query.
 
@@ -151,7 +148,7 @@ class FireQuery:
         new_query = self._query.order_by(field, direction=direction_const)
         return FireQuery(new_query, self._parent_collection, self._projection)
 
-    def limit(self, count: int) -> 'FireQuery':
+    def limit(self, count: int) -> 'FireQuery[SchemaT_co]':
         """
         Limit the number of results returned.
 

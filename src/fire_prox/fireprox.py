@@ -5,8 +5,11 @@ This module provides the synchronous FireProx class, which serves as the primary
 interface for users to interact with Firestore through the simplified FireProx API.
 """
 
+from typing import overload
+
 from google.cloud.firestore import Client as FirestoreClient
 
+from ._typing import SchemaT, SchemaType
 from .base_fireprox import BaseFireProx
 from .fire_collection import FireCollection
 from .fire_object import FireObject
@@ -148,7 +151,19 @@ class FireProx(BaseFireProx):
     # Collection Access
     # =========================================================================
 
-    def collection(self, path: str) -> FireCollection:
+    @overload
+    def collection(self, path: str) -> FireCollection[object]:
+        ...
+
+    @overload
+    def collection(self, path: str, schema: SchemaType[SchemaT]) -> FireCollection[SchemaT]:
+        ...
+
+    def collection(
+        self,
+        path: str,
+        schema: SchemaType[SchemaT] | None = None,
+    ) -> FireCollection[SchemaT]:
         """
         Get a reference to a collection by its path.
 
@@ -160,8 +175,13 @@ class FireProx(BaseFireProx):
                  Can be a root-level collection (odd number of segments) or
                  a subcollection path.
 
+        Args:
+            schema: Optional dataclass schema to bind immediately. When provided,
+                the returned collection and its documents expose
+                ``FireObject[schema]`` to static type checkers.
+
         Returns:
-            A FireCollection instance.
+            A FireCollection instance, typed when ``schema`` is supplied.
 
         Raises:
             ValueError: If path has an even number of segments (invalid
@@ -180,6 +200,6 @@ class FireProx(BaseFireProx):
             new_post.title = 'Analysis Engine'
             new_post.save()
         """
-        return self._create_collection_proxy(path, FireCollection)
+        return self._create_collection_proxy(path, FireCollection, schema)
 
     # Note: batch() and transaction() methods are inherited from BaseFireProx
