@@ -7,7 +7,7 @@ a real Firestore instance (emulator).
 
 import pytest
 
-from fire_prox import FireProx, State
+from fire_prox import FireCollection, FireObject, FireProx, State
 
 
 class TestPhase1Integration:
@@ -174,7 +174,13 @@ class TestPhase1Integration:
         """Test path validation."""
         # Valid paths
         user = db.doc('users/test')  # Should not raise
+        assert isinstance(user, FireObject)
+        assert user.path == 'users/test'
+        assert user.is_attached()
+
         collection = db.collection('users')  # Should not raise
+        assert isinstance(collection, FireCollection)
+        assert collection.path == 'users'
 
         # Invalid paths
         with pytest.raises(ValueError):
@@ -237,6 +243,32 @@ class TestPhase1Integration:
 
         assert user.id is not None
         assert len(user.id) > 0
+        assert user.is_loaded()
+
+    def test_collection_doc_roundtrip(self, db, users_collection, sample_user_data):
+        """Ensure doc() returns an attached object that can fetch data."""
+        users_collection._collection_ref.document('roundtrip').set(sample_user_data)
+
+        user = users_collection.doc('roundtrip')
+        assert isinstance(user, FireObject)
+        assert user.is_attached()
+        assert user.id == 'roundtrip'
+
+        user.fetch()
+        assert user.is_loaded()
+        assert user.to_dict()['name'] == sample_user_data['name']
+
+    def test_new_returns_detached_object(self, users_collection):
+        """Ensure new() returns a detached FireObject ready for data entry."""
+        user = users_collection.new()
+
+        assert isinstance(user, FireObject)
+        assert user.is_detached()
+        assert user.id is None
+        assert user.path is None
+
+        user.name = 'Grace Hopper'
+        user.save()
         assert user.is_loaded()
 
 

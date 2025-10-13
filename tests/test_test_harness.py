@@ -1,38 +1,22 @@
-import os
+"""Tests for the Firestore test harness utilities."""
 
-from google.cloud import firestore
-
-from fire_prox.testing import (
-    firestore_test_harness,  # noqa: F401 - registered as pytest fixture
-    testing_client,
-)
+from fire_prox.testing import firestore_harness, testing_client
 
 
-def test_fire_prox(firestore_test_harness):
-    os.environ["GRPC_VERBOSITY"] = "NONE"
-    db = testing_client()
+def test_firestore_harness_provides_clean_database():
+    """The harness should clean documents before and after use."""
+    with firestore_harness() as harness:
+        client = testing_client()
 
-    # Add a document to the 'users' collection
-    doc_ref = db.collection("users").document()
-    doc_ref.set(
-        {
-            "name": "Test User",
-            "email": "testuser@example.com",
-            "created": firestore.SERVER_TIMESTAMP,
-        }
-    )
+        # Fixture should clean before yielding control
+        assert list(client.collection("users").stream()) == []
+        assert client.project == harness.project_id
 
-    print(f"Added document with ID: {doc_ref.id}")
+        # Create a document to ensure data is written during the test
+        doc_ref = client.collection("users").document("harness-user")
+        doc_ref.set({"name": "Harness User", "language": "Python"})
+        assert doc_ref.get().to_dict() == {"name": "Harness User", "language": "Python"}
 
-    # query the database
-    query = db.collection("users")
-    results = query.stream()
-
-    for doc in results:
-        print(f"Document ID: {doc.id}, Data: {doc.to_dict()}")
-
-    firestore_test_harness.cleanup()
-    # Verify deletion
-    results = list(db.collection("users").stream())
-    assert len(results) == 0
-    print("All documents deleted successfully.")
+    # Context manager cleanup runs after exiting the block
+    post_client = testing_client()
+    assert list(post_client.collection("users").stream()) == []
