@@ -1,12 +1,10 @@
-"""
-AsyncFireCollection: Async version of FireCollection.
+"""Async collection wrapper with optional schema binding."""
 
-This module implements the asynchronous FireCollection class for use with
-google.cloud.firestore.AsyncClient.
-"""
+from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Generic, Optional, cast
 
+from ._typing import SchemaT, SchemaT_co, SchemaType
 from .async_fire_object import AsyncFireObject
 from .base_fire_collection import BaseFireCollection
 from .state import State
@@ -15,7 +13,7 @@ if TYPE_CHECKING:
     from .async_fire_query import AsyncFireQuery
 
 
-class AsyncFireCollection(BaseFireCollection):
+class AsyncFireCollection(BaseFireCollection[SchemaT_co], Generic[SchemaT_co]):
     """
     A wrapper around Firestore AsyncCollectionReference for document management.
 
@@ -52,11 +50,12 @@ class AsyncFireCollection(BaseFireCollection):
         *,
         doc_ref: Any,
         initial_state: State,
-        parent_collection: 'AsyncFireCollection',
+        parent_collection: 'AsyncFireCollection[SchemaT_co]',
         sync_doc_ref: Optional[Any] = None,
         sync_client: Optional[Any] = None,
+        schema_type: SchemaType[SchemaT_co] | None,
         **_: Any,
-    ) -> AsyncFireObject:
+    ) -> AsyncFireObject[SchemaT_co]:
         """Instantiate the asynchronous FireObject wrapper."""
         return AsyncFireObject(
             doc_ref=doc_ref,
@@ -64,6 +63,7 @@ class AsyncFireCollection(BaseFireCollection):
             sync_client=sync_client,
             initial_state=initial_state,
             parent_collection=parent_collection,
+            schema_type=schema_type,
         )
 
     def _get_new_kwargs(self) -> dict[str, Any]:
@@ -75,13 +75,17 @@ class AsyncFireCollection(BaseFireCollection):
             sync_doc_ref = self._sync_client.collection(self.path).document(doc_id)
         return {'sync_doc_ref': sync_doc_ref, 'sync_client': self._sync_client}
 
-    def new(self) -> AsyncFireObject:
+    def new(self) -> AsyncFireObject[SchemaT_co]:
         """Create a new AsyncFireObject in DETACHED state."""
         return super().new()
 
-    def doc(self, doc_id: str) -> AsyncFireObject:
+    def doc(self, doc_id: str) -> AsyncFireObject[SchemaT_co]:
         """Get a reference to a specific document in this collection."""
         return super().doc(doc_id)
+
+    def with_schema(self, schema: SchemaType[SchemaT]) -> 'AsyncFireCollection[SchemaT]':
+        """Return a typed clone of this collection bound to ``schema``."""
+        return cast('AsyncFireCollection[SchemaT]', super().with_schema(schema))
 
     # =========================================================================
     # Properties (inherited from BaseFireCollection)
@@ -104,7 +108,7 @@ class AsyncFireCollection(BaseFireCollection):
     # Query Methods (Phase 2)
     # =========================================================================
 
-    def where(self, field: str, op: str, value: Any) -> 'AsyncFireQuery':
+    def where(self, field: str, op: str, value: Any) -> 'AsyncFireQuery[SchemaT_co]':
         """
         Create a query with a filter condition.
 
@@ -138,7 +142,7 @@ class AsyncFireCollection(BaseFireCollection):
         self,
         field: str,
         direction: str = 'ASCENDING'
-    ) -> 'AsyncFireQuery':
+    ) -> 'AsyncFireQuery[SchemaT_co]':
         """
         Create a query with ordering.
 
@@ -167,7 +171,7 @@ class AsyncFireCollection(BaseFireCollection):
         native_query = self._collection_ref.order_by(field, direction=direction_const)
         return AsyncFireQuery(native_query, parent_collection=self)
 
-    def limit(self, count: int) -> 'AsyncFireQuery':
+    def limit(self, count: int) -> 'AsyncFireQuery[SchemaT_co]':
         """
         Create a query with a result limit.
 
