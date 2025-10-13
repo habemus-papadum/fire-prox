@@ -29,8 +29,6 @@ nav:
   - Implementation Log: Implementation_Log.md
   - API: reference.md
   - Roadmap: STATUS.md
-  - Testing:
-    - Test Suite Analysis: testing_analysis.md
   - Claude Code Sessions:
     - 2025-10-12 22:19 (6m): sessionslogs/2025-10-12_22-19-45_00b3f532.md
     - 2025-10-12 21:01 (1h 11m): sessionslogs/2025-10-12_21-01-57_d1bd7a8c.md
