@@ -37,6 +37,8 @@ dev = [
     "jupyter>=1.1.1",
     "mkdocs-jupyter>=0.25.1",
     "python-dotenv>=1.1.1",
+    "mypy>=1.18.2",
+    "pyright>=1.1.406",
 ]
 
 [tool.pytest.ini_options]
