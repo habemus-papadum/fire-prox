@@ -1,5 +1,5 @@
 # fire-prox
-Prototyping focused acceleration layer for Firestor
+Prototyping focused acceleration layer for Firestore
 
 ## Installation
 ```bash
