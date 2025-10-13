@@ -10,7 +10,6 @@ from google.cloud.firestore import Client as FirestoreClient
 from .base_fireprox import BaseFireProx
 from .fire_collection import FireCollection
 from .fire_object import FireObject
-from .state import State
 
 
 class FireProx(BaseFireProx):
@@ -128,18 +127,7 @@ class FireProx(BaseFireProx):
             # Lazy loading
             print(user.name)  # Triggers fetch on first access
         """
-        # Validate path
-        self._validate_path(path, 'document')
-
-        # Create document reference
-        doc_ref = self._client.document(path)
-
-        # Return FireObject in ATTACHED state
-        return FireObject(
-            doc_ref=doc_ref,
-            initial_state=State.ATTACHED,
-            parent_collection=None
-        )
+        return self._create_document_proxy(path, FireObject)
 
     def document(self, path: str) -> FireObject:
         """
@@ -192,16 +180,6 @@ class FireProx(BaseFireProx):
             new_post.title = 'Analysis Engine'
             new_post.save()
         """
-        # Validate path
-        self._validate_path(path, 'collection')
-
-        # Create collection reference
-        collection_ref = self._client.collection(path)
-
-        # Return FireCollection
-        return FireCollection(
-            collection_ref=collection_ref,
-            client=self
-        )
+        return self._create_collection_proxy(path, FireCollection)
 
     # Note: batch() and transaction() methods are inherited from BaseFireProx

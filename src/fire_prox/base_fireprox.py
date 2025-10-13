@@ -5,7 +5,9 @@ This module contains the base class that implements all logic that is
 identical between synchronous and asynchronous FireProx implementations.
 """
 
-from typing import Any
+from typing import Any, Dict
+
+from .state import State
 
 
 class BaseFireProx:
@@ -237,6 +239,34 @@ class BaseFireProx:
                 raise ValueError(
                     f"Collection path must have odd number of segments, got {num_segments}: '{path}'"
                 )
+
+    def _get_document_kwargs(self, path: str) -> Dict[str, Any]:
+        """Return extra keyword arguments for document wrappers."""
+        return {}
+
+    def _get_collection_kwargs(self, path: str) -> Dict[str, Any]:
+        """Return extra keyword arguments for collection wrappers."""
+        return {}
+
+    def _create_document_proxy(self, path: str, factory: Any) -> Any:
+        """Validate and construct a document wrapper using the provided factory."""
+        self._validate_path(path, 'document')
+        doc_ref = self._client.document(path)
+        kwargs: Dict[str, Any] = {
+            'doc_ref': doc_ref,
+            'initial_state': State.ATTACHED,
+            'parent_collection': None,
+        }
+        kwargs.update(self._get_document_kwargs(path))
+        return factory(**kwargs)
+
+    def _create_collection_proxy(self, path: str, factory: Any) -> Any:
+        """Validate and construct a collection wrapper using the provided factory."""
+        self._validate_path(path, 'collection')
+        collection_ref = self._client.collection(path)
+        kwargs: Dict[str, Any] = {'collection_ref': collection_ref, 'client': self}
+        kwargs.update(self._get_collection_kwargs(path))
+        return factory(**kwargs)
 
     # =========================================================================
     # Special Methods (SHARED)

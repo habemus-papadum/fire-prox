@@ -4,8 +4,6 @@ from typing import Iterator, Optional
 
 import google.cloud.firestore as firestore
 import requests
-from google.cloud.firestore import Client
-from google.cloud.firestore_v1 import AsyncClient
 
 from fire_prox.async_fireprox import AsyncFireProx
 from fire_prox.fireprox import FireProx

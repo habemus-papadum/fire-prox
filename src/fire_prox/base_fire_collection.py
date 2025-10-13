@@ -5,7 +5,9 @@ This module contains the base class that implements all logic that is
 identical between synchronous and asynchronous FireCollection implementations.
 """
 
-from typing import Any, Optional
+from typing import Any, Dict, Optional
+
+from .state import State
 
 
 class BaseFireCollection:
@@ -18,8 +20,7 @@ class BaseFireCollection:
     - String representations
 
     Subclasses must implement:
-    - new() - creates FireObject/AsyncFireObject
-    - doc() - creates FireObject/AsyncFireObject
+    - _instantiate_object() - creates FireObject/AsyncFireObject
     - Query methods (Phase 2)
     """
 
@@ -41,6 +42,48 @@ class BaseFireCollection:
         self._collection_ref = collection_ref
         self._client = client
         self._sync_client = sync_client
+
+    # =========================================================================
+    # Document Factories (SHARED)
+    # =========================================================================
+
+    def _instantiate_object(
+        self,
+        *,
+        doc_ref: Any,
+        initial_state: State,
+        parent_collection: 'BaseFireCollection',
+        **kwargs: Any,
+    ) -> Any:
+        """Create a collection-backed document instance."""
+        raise NotImplementedError
+
+    def _get_new_kwargs(self) -> Dict[str, Any]:
+        """Return extra kwargs for instantiating DETACHED objects."""
+        return {}
+
+    def _get_doc_kwargs(self, doc_id: str) -> Dict[str, Any]:
+        """Return extra kwargs for instantiating ATTACHED objects."""
+        return {}
+
+    def new(self) -> Any:
+        """Create a new document proxy in DETACHED state."""
+        return self._instantiate_object(
+            doc_ref=None,
+            initial_state=State.DETACHED,
+            parent_collection=self,
+            **self._get_new_kwargs(),
+        )
+
+    def doc(self, doc_id: str) -> Any:
+        """Create a document proxy in ATTACHED state."""
+        doc_ref = self._collection_ref.document(doc_id)
+        return self._instantiate_object(
+            doc_ref=doc_ref,
+            initial_state=State.ATTACHED,
+            parent_collection=self,
+            **self._get_doc_kwargs(doc_id),
+        )
 
     # =========================================================================
     # Transaction Support (SHARED)

@@ -54,7 +54,12 @@ class FireQuery:
             results = [FireObject.from_snapshot(snap) for snap in native_query.stream()]
     """
 
-    def __init__(self, native_query: Query, parent_collection: Optional[Any] = None, projection: Optional[tuple] = None):
+    def __init__(
+        self,
+        native_query: Query,
+        parent_collection: Optional[Any] = None,
+        projection: Optional[tuple] = None,
+    ):
         """
         Initialize a FireQuery.
 
