@@ -86,7 +86,6 @@ from .async_fireprox import AsyncFireProx
 from .fire_collection import FireCollection
 from .fire_object import FireObject
 from .fire_query import FireQuery
-from .fire_vector import FireVector
 from .fireprox import FireProx
 
 # Shared
@@ -107,7 +106,6 @@ __all__ = [
     "AsyncFireQuery",
     # Shared
     "State",
-    "FireVector",
     # Aggregations
     "Count",
     "Sum",
