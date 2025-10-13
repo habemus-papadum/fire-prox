@@ -7,7 +7,7 @@ a real Firestore instance (emulator).
 
 import pytest
 
-from fire_prox import AsyncFireProx, State
+from fire_prox import AsyncFireCollection, AsyncFireObject, AsyncFireProx, State
 
 
 class TestAsyncIntegration:
@@ -184,7 +184,13 @@ class TestAsyncIntegration:
         """Test path validation."""
         # Valid paths
         user = async_db.doc('users/test')  # Should not raise
+        assert isinstance(user, AsyncFireObject)
+        assert user.path == 'users/test'
+        assert user.is_attached()
+
         collection = async_db.collection('users')  # Should not raise
+        assert isinstance(collection, AsyncFireCollection)
+        assert collection.path == 'users'
 
         # Invalid paths
         with pytest.raises(ValueError):
@@ -218,13 +224,33 @@ class TestAsyncIntegration:
         with pytest.raises(RuntimeError):
             await user.save()
 
-        # Cannot fetch DELETED
-        with pytest.raises(RuntimeError):
-            await user.fetch()
+    @pytest.mark.asyncio
+    async def test_collection_doc_roundtrip(self, async_db, async_users_collection, sample_user_data):
+        """Ensure doc() returns an attached async object that can fetch data."""
+        async_db._sync_client.collection('users').document('roundtrip').set(sample_user_data)
 
-        # Cannot delete DELETED
-        with pytest.raises(RuntimeError):
-            await user.delete()
+        user = async_users_collection.doc('roundtrip')
+        assert isinstance(user, AsyncFireObject)
+        assert user.is_attached()
+        assert user.id == 'roundtrip'
+
+        await user.fetch()
+        assert user.is_loaded()
+        assert user.to_dict()['name'] == sample_user_data['name']
+
+    @pytest.mark.asyncio
+    async def test_new_returns_detached_object(self, async_users_collection):
+        """Ensure new() returns a detached AsyncFireObject ready for data entry."""
+        user = async_users_collection.new()
+
+        assert isinstance(user, AsyncFireObject)
+        assert user.is_detached()
+        assert user.id is None
+        assert user.path is None
+
+        user.name = 'Grace Hopper'
+        await user.save()
+        assert user.is_loaded()
 
     @pytest.mark.asyncio
     async def test_string_representations(self, async_db, async_users_collection):

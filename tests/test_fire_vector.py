@@ -113,8 +113,7 @@ class TestFireVectorConversion:
         native_vec = fire_vec.to_firestore_vector()
 
         assert isinstance(native_vec, Vector)
-        # Native Vector should contain our values
-        # (actual verification would need Firestore)
+        assert list(native_vec) == pytest.approx(values)
 
     def test_from_firestore_vector(self):
         """Test creating FireVector from native Vector."""
@@ -130,6 +129,7 @@ class TestFireVectorConversion:
         result = fire_vec.to_list()
         assert len(result) == 3
         assert all(isinstance(v, float) for v in result)
+        assert result == pytest.approx([0.1, 0.2, 0.3])
 
     def test_from_firestore_vector_invalid_type(self):
         """Test that from_firestore_vector requires Vector type."""
