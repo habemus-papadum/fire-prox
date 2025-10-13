@@ -4,9 +4,13 @@
 
 Fire-Prox today treats Firestore documents as schemaless payloads that are surfaced
 as mutable Python objects. This keeps the prototyping experience fast, but makes it
-difficult to opt-in to stronger typing, validation, and IDE assistance once a
-collection stabilizes. Teams have asked for a way to declare a schema _after_ a
+difficult to opt-in to stronger typing and IDE assistance once a collection
+stabilizes. Teams have asked for a way to declare a schema _after_ a
 collection already exists without sacrificing Fire-Prox's dynamic ergonomics.
+
+While the original motivation included optional runtime validation, the immediate
+driver is to enable static tools—IDEs, type checkers, and linters—to reason about
+document shapes before code executes.
 
 This document proposes an additive design that allows developers to register a
 schema for any collection while preserving the current opt-in behavior and
@@ -21,14 +25,16 @@ minimizing churn across the synchronous and asynchronous APIs.
    type annotations, and other plain Python instances without forcing a specific
    modeling framework.
 3. **IDE-friendly types** – When a schema is registered, code completion and
-   static analysis should understand document attributes.
-4. **Runtime validation** – Provide configurable hooks to validate documents at
-   creation, update, and fetch time. Defaults should be conservative to avoid
-   surprising users.
+   static analysis should understand document attributes without requiring code to
+   run.
+4. **Static-first posture** – Runtime validation hooks remain optional future
+   enhancements. The initial implementation focuses on surfacing types to static
+   tooling rather than rejecting data at save or fetch time.
 5. **Minimal class explosion** – Favor generics and composition over new
    subclasses to prevent duplicating the Fire-Prox surface area.
 6. **Extensible marshalling** – Allow registration of serializers for commonly
-   requested immutable Python types (e.g., tuples, enums, timedeltas).
+   requested immutable Python types (e.g., tuples, enums, timedeltas) while keeping
+   schema-bound collections usable by linters and IDEs.
 
 ## Non-Goals
 
@@ -127,12 +133,43 @@ Provide two ergonomic patterns:
 ### Validation Options
 
 `SchemaBinding` exposes configuration like `validate_on` with values in
-`{"save", "fetch", "never", "always"}`. Validation uses adapter-provided hooks or
-plain callable validators. The default is `validate_on={"save"}` to catch issues
-before persistence without penalizing reads.
+`{"save", "fetch", "never", "always"}`. Validation hooks are optional and disabled
+by default to keep the feature aligned with its typing-first goal. Projects can
+enable them explicitly when they are ready to move beyond static analysis.
 
 Errors raise `SchemaValidationError` with actionable messages and the offending
-field paths.
+field paths when validation is enabled.
+
+### Query Awareness and Static Typing
+
+Schema bindings must extend beyond `collection.new()` to benefit query builders
+and iterators. When a schema-backed collection creates a query (e.g.,
+`collection.where("age", ">", 18)`), the resulting query object should retain the
+same generic parameter so static tooling understands that `for user in query`
+produces `FireObject[T_co]`. Helper methods like `stream()`, `get()`, and
+aggregations (`count`, `sum`) likewise propagate the bound type. For mixed-mode
+queries that project a subset of fields, adapters can expose a lightweight
+`Partial[T_co]` helper type that marks attributes as `Optional` or `Unknown`
+within static analysis while allowing runtime access to the raw dictionary.
+
+### Server Timestamp Handling
+
+Firestore's sentinel values (e.g., `SERVER_TIMESTAMP`) require special casing.
+Adapters interpret typing metadata such as `Annotated[datetime.datetime,
+"fire_prox.server_timestamp"]` or a dedicated helper `ServerTimestamp` marker.
+When saving, the adapter emits the sentinel; when reading, the field materializes
+as an optional `datetime`. Static tools should therefore treat the attribute as
+`datetime | ServerTimestamp` to reflect that it may hold a sentinel prior to
+persistence. The binding tracks which fields use sentinels so diffing and
+`partial_update` logic can skip them until Firestore returns a concrete value.
+
+### Partial Data and Missing Fields
+
+Because collections may contain legacy documents missing newly declared schema
+fields, adapters treat absent data as `None` or a sentinel value rather than
+raising errors. Static tooling models these fields as `Optional` to keep IDE
+feedback accurate. Developers can opt into stricter behavior via validation
+flags once datasets converge.
 
 ### Document References via Annotated Types
 
@@ -181,6 +218,15 @@ Adapters should remain synchronous; serialization and validation happen before
 I/O. Async-specific code only handles awaiting Firestore operations, keeping the
 feature surface consistent across both APIs.
 
+### Static Analysis Tooling
+
+To support editors and linters without waiting on runtime behavior, Fire-Prox can
+emit `.pyi` stub helpers or expose a `typing_extensions.Protocol` representing the
+schema-bound object interface. Integrations with `mypy`, `pyright`, and Ruff's
+`flake8-annotations` rules ensure the adapter metadata surfaces in widely used
+toolchains. IDE quick-fixes can leverage adapter introspection to auto-complete
+field names, reducing stringly-typed mistakes in query filters and projections.
+
 ## Migration and Compatibility
 
 - **Default Behavior** – If users ignore the new API, Fire-Prox behaves exactly
@@ -198,12 +244,17 @@ feature surface consistent across both APIs.
 1. **Schema inference for legacy data** – Should Fire-Prox offer utilities to
    infer a schema from existing documents, or is manual declaration sufficient?
 2. **Partial updates** – How should `fire_object.save(fields=[...])` behave when
-   using schema instances? We may need adapter support for sparse serialization.
+   using schema instances? We may need adapter support for sparse serialization
+   and for query projections that only hydrate a subset of fields.
 3. **Performance considerations** – Large documents may incur overhead when
    serializing through adapters. Caching strategies or incremental diffing may be
    required.
 4. **IDE integration** – We rely on generics to surface types, but verifying the
-   experience across major editors (PyCharm, VS Code) warrants prototyping.
+   experience across major editors (PyCharm, VS Code) warrants prototyping. We may
+   also want to ship pre-built stubs for common adapters.
+5. **Server timestamp ergonomics** – Should Fire-Prox expose a first-class type or
+   rely on annotations for sentinel values? How do async listeners surface pending
+   timestamps?
 
 ## Next Steps
 
