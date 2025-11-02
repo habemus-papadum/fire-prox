@@ -91,7 +91,7 @@ from .fireprox import FireProx
 # Shared
 from .state import State
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     # Sync API
