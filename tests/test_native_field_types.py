@@ -5,7 +5,7 @@ classes without requiring custom wrappers. The focus is on vector embeddings,
 blobs, and server timestamp sentinels.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 from google.cloud import firestore
