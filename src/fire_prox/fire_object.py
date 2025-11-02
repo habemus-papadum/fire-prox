@@ -5,7 +5,7 @@ This module implements the synchronous FireObject class, which serves as a
 schemaless, state-aware proxy for Firestore documents.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from google.cloud.firestore_v1.document import DocumentReference, DocumentSnapshot
 
@@ -287,7 +287,32 @@ class FireObject(BaseFireObject):
 
         return self
 
-    def delete(self, batch: Optional[Any] = None) -> None:
+    def collections(self, names_only: bool = False) -> List[Any]:
+        """
+        List subcollections beneath this document.
+
+        Args:
+            names_only: When True, return collection IDs instead of wrappers.
+
+        Returns:
+            List of subcollection names or FireCollection wrappers.
+        """
+        self._validate_not_detached("collections()")
+        self._validate_not_deleted("collections()")
+
+        subcollections = list(self._doc_ref.collections())
+        if names_only:
+            return [col.id for col in subcollections]
+
+        return [self.collection(col.id) for col in subcollections]
+
+    def delete(
+        self,
+        batch: Optional[Any] = None,
+        *,
+        recursive: bool = True,
+        batch_size: int = 50,
+    ) -> None:
         """
         Delete the document from Firestore (synchronous).
 
@@ -298,10 +323,13 @@ class FireObject(BaseFireObject):
         Args:
             batch: Optional batch object for batched deletes. If provided,
                   the delete will be accumulated in the batch (committed later).
+            recursive: When True (default), delete all subcollections first.
+            batch_size: Batch size to use for recursive subcollection cleanup.
 
         Raises:
             ValueError: If called on a DETACHED object (no document to delete).
             RuntimeError: If called on an already-DELETED object.
+            ValueError: If recursive deletion is requested while using a batch.
 
         State Transitions:
             ATTACHED -> DELETED: Deletes document (data never loaded)
@@ -315,13 +343,61 @@ class FireObject(BaseFireObject):
 
             # Batch delete
             batch = db.batch()
-            user1.delete(batch=batch)
-            user2.delete(batch=batch)
+            user1.delete(batch=batch, recursive=False)
+            user2.delete(batch=batch, recursive=False)
             batch.commit()  # Commit all operations
         """
+        if recursive:
+            if batch is not None:
+                raise ValueError("Cannot delete recursively as part of a batch.")
+            if batch_size <= 0:
+                raise ValueError(f"batch_size must be positive, got {batch_size}")
+            self._delete_descendant_collections(batch_size=batch_size)
+
         self._prepare_delete()
         self._write_delete(batch=batch)
         self._transition_to_deleted()
+
+    def _delete_descendant_collections(self, batch_size: int) -> None:
+        """Delete all subcollections beneath this document."""
+        for name in self.collections(names_only=True):
+            subcollection = self.collection(name)
+            subcollection.delete_all(batch_size=batch_size, recursive=True)
+
+    # =========================================================================
+    # Subcollection Utilities
+    # =========================================================================
+
+    def delete_subcollection(
+        self,
+        name: str,
+        *,
+        batch_size: int = 50,
+        recursive: bool = True,
+        dry_run: bool = False,
+    ) -> Dict[str, int]:
+        """
+        Delete a subcollection beneath this document.
+
+        Firestore keeps subcollections even after their parent document is
+        deleted. This helper clears a specific subcollection using the same
+        batched logic as FireCollection.delete_all().
+
+        Args:
+            name: Subcollection name relative to this document.
+            batch_size: Maximum number of deletes per commit.
+            recursive: Whether to delete nested subcollections.
+            dry_run: Count affected documents without executing writes.
+
+        Returns:
+            Dictionary with counts for deleted documents and subcollections.
+        """
+        subcollection = self.collection(name)
+        return subcollection.delete_all(
+            batch_size=batch_size,
+            recursive=recursive,
+            dry_run=dry_run,
+        )
 
     # =========================================================================
     # Factory Methods

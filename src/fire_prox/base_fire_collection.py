@@ -66,6 +66,23 @@ class BaseFireCollection:
         """Return extra kwargs for instantiating ATTACHED objects."""
         return {}
 
+    # -------------------------------------------------------------------------
+    # Shared validation helpers
+    # -------------------------------------------------------------------------
+
+    def _validate_batch_size(self, batch_size: int) -> None:
+        """
+        Validate that a batch size is a positive integer.
+
+        Args:
+            batch_size: Proposed batch size to validate.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
+
     def new(self) -> Any:
         """Create a new document proxy in DETACHED state."""
         return self._instantiate_object(

@@ -288,7 +288,7 @@ user.save()  # Automatically converted to ArrayUnion(['computer-science'])
    user1.save(batch=batch)
 
    user2 = db.doc('users/bob')
-   user2.delete(batch=batch)
+   user2.delete(batch=batch, recursive=False)
 
    # Commit all atomically
    batch.commit()

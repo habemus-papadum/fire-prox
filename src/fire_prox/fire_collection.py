@@ -6,7 +6,7 @@ Firestore collection and provides methods for creating new documents and
 querying existing ones.
 """
 
-from typing import TYPE_CHECKING, Any, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 from .base_fire_collection import BaseFireCollection
 from .fire_object import FireObject
@@ -388,3 +388,110 @@ class FireCollection(BaseFireCollection):
         # Use collection reference directly as a query for aggregation
         query = FireQuery(self._collection_ref, parent_collection=self)
         return query.aggregate(**aggregations)
+
+    # =========================================================================
+    # Collection Deletion
+    # =========================================================================
+
+    def delete_all(
+        self,
+        *,
+        batch_size: int = 50,
+        recursive: bool = True,
+        dry_run: bool = False,
+    ) -> Dict[str, int]:
+        """
+        Delete every document in this collection.
+
+        Firestore offers no atomic "drop collection" operation. This helper
+        iterates through each document and issues batched deletes. When
+        recursive is True (default) it will also clear any nested subcollections
+        before deleting their parent document.
+
+        Args:
+            batch_size: Maximum number of deletes to commit at once.
+            recursive: Whether to delete nested subcollections.
+            dry_run: Count what would be removed without executing writes.
+
+        Returns:
+            Dictionary with counts for deleted documents and subcollections
+            visited during recursion.
+
+        Raises:
+            ValueError: If batch_size is not positive.
+        """
+        self._validate_batch_size(batch_size)
+
+        return self._delete_collection_recursive(
+            collection_ref=self._collection_ref,
+            batch_size=batch_size,
+            recursive=recursive,
+            dry_run=dry_run,
+            include_self=False,
+        )
+
+    def _delete_collection_recursive(
+        self,
+        *,
+        collection_ref: Any,
+        batch_size: int,
+        recursive: bool,
+        dry_run: bool,
+        include_self: bool,
+    ) -> Dict[str, int]:
+        """Internal helper to delete documents within a collection reference."""
+        client = collection_ref._client
+        stats = {'documents': 0, 'collections': 1 if include_self else 0}
+        batch = None if dry_run else client.batch()
+        ops_in_batch = 0
+
+        for doc_ref in collection_ref.list_documents(page_size=batch_size):
+            if recursive:
+                sub_stats = self._delete_document_subcollections(
+                    doc_ref,
+                    batch_size=batch_size,
+                    recursive=recursive,
+                    dry_run=dry_run,
+                )
+                stats['documents'] += sub_stats['documents']
+                stats['collections'] += sub_stats['collections']
+
+            if not dry_run and batch is not None:
+                batch.delete(doc_ref)
+                ops_in_batch += 1
+
+            stats['documents'] += 1
+
+            if not dry_run and batch is not None and ops_in_batch >= batch_size:
+                batch.commit()
+                batch = client.batch()
+                ops_in_batch = 0
+
+        if not dry_run and batch is not None and ops_in_batch:
+            batch.commit()
+
+        return stats
+
+    def _delete_document_subcollections(
+        self,
+        doc_ref: Any,
+        *,
+        batch_size: int,
+        recursive: bool,
+        dry_run: bool,
+    ) -> Dict[str, int]:
+        """Delete all subcollections hanging off a document reference."""
+        stats = {'documents': 0, 'collections': 0}
+
+        for subcollection_ref in doc_ref.collections():
+            sub_stats = self._delete_collection_recursive(
+                collection_ref=subcollection_ref,
+                batch_size=batch_size,
+                recursive=recursive,
+                dry_run=dry_run,
+                include_self=True,
+            )
+            stats['documents'] += sub_stats['documents']
+            stats['collections'] += sub_stats['collections']
+
+        return stats

@@ -5,7 +5,7 @@ This module implements the asynchronous FireCollection class for use with
 google.cloud.firestore.AsyncClient.
 """
 
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Optional
 
 from .async_fire_object import AsyncFireObject
 from .base_fire_collection import BaseFireCollection
@@ -387,3 +387,110 @@ class AsyncFireCollection(BaseFireCollection):
         # Use collection reference directly as a query for aggregation
         query = AsyncFireQuery(self._collection_ref, parent_collection=self)
         return await query.aggregate(**aggregations)
+
+    # =========================================================================
+    # Collection Deletion
+    # =========================================================================
+
+    async def delete_all(
+        self,
+        *,
+        batch_size: int = 50,
+        recursive: bool = True,
+        dry_run: bool = False,
+    ) -> Dict[str, int]:
+        """
+        Delete every document in this collection asynchronously.
+
+        Firestore does not expose a server-side "drop collection" operation.
+        This helper batches document deletes and, when recursive is True
+        (default), also clears any nested subcollections before removing
+        the parent document.
+
+        Args:
+            batch_size: Maximum number of deletes per commit.
+            recursive: Whether to delete nested subcollections.
+            dry_run: Count affected documents without executing writes.
+
+        Returns:
+            Dictionary with counts for deleted documents and subcollections
+            visited during recursion.
+
+        Raises:
+            ValueError: If batch_size is not positive.
+        """
+        self._validate_batch_size(batch_size)
+
+        return await self._delete_collection_recursive(
+            collection_ref=self._collection_ref,
+            batch_size=batch_size,
+            recursive=recursive,
+            dry_run=dry_run,
+            include_self=False,
+        )
+
+    async def _delete_collection_recursive(
+        self,
+        *,
+        collection_ref: Any,
+        batch_size: int,
+        recursive: bool,
+        dry_run: bool,
+        include_self: bool,
+    ) -> Dict[str, int]:
+        """Internal helper to delete documents within an async collection reference."""
+        client = collection_ref._client
+        stats = {'documents': 0, 'collections': 1 if include_self else 0}
+        batch = None if dry_run else client.batch()
+        ops_in_batch = 0
+
+        async for doc_ref in collection_ref.list_documents(page_size=batch_size):
+            if recursive:
+                sub_stats = await self._delete_document_subcollections(
+                    doc_ref,
+                    batch_size=batch_size,
+                    recursive=recursive,
+                    dry_run=dry_run,
+                )
+                stats['documents'] += sub_stats['documents']
+                stats['collections'] += sub_stats['collections']
+
+            if not dry_run and batch is not None:
+                batch.delete(doc_ref)
+                ops_in_batch += 1
+
+            stats['documents'] += 1
+
+            if not dry_run and batch is not None and ops_in_batch >= batch_size:
+                await batch.commit()
+                batch = client.batch()
+                ops_in_batch = 0
+
+        if not dry_run and batch is not None and ops_in_batch:
+            await batch.commit()
+
+        return stats
+
+    async def _delete_document_subcollections(
+        self,
+        doc_ref: Any,
+        *,
+        batch_size: int,
+        recursive: bool,
+        dry_run: bool,
+    ) -> Dict[str, int]:
+        """Delete all subcollections hanging off an async document reference."""
+        stats = {'documents': 0, 'collections': 0}
+
+        async for subcollection_ref in doc_ref.collections():
+            sub_stats = await self._delete_collection_recursive(
+                collection_ref=subcollection_ref,
+                batch_size=batch_size,
+                recursive=recursive,
+                dry_run=dry_run,
+                include_self=True,
+            )
+            stats['documents'] += sub_stats['documents']
+            stats['collections'] += sub_stats['collections']
+
+        return stats

@@ -136,9 +136,37 @@ post.save()  # Saved to users/ada/posts/{auto-id}
 comment = post.collection('comments').new()
 comment.text = 'Brilliant!'
 comment.save()  # users/ada/posts/{id}/comments/{id}
+
+# Inspect all subcollections beneath the document
+user.collections(names_only=True)       # ['posts']
+db.collections('users/ada')             # [FireCollection('users/ada/posts')]
 ```
 
 **Demo**: [Phase 2 Features](/demos/phase2/demo/)
+
+#### Collection Cleanup
+Remove prototype data quickly without manual scripts:
+
+```python
+# Drop every document in a collection (and nested subcollections)
+users = db.collection('users')
+summary = users.delete_all(batch_size=100, recursive=True)
+print(summary)  # {'documents': 42, 'collections': 7}
+
+# Target a single subcollection beneath a document
+user = db.doc('users/alovelace')
+posts = user.delete_subcollection('posts')
+print(posts)
+
+# Delete document and all descendants (default behaviour)
+user.delete()
+
+# Skip recursion if you only want to remove the parent document
+user = db.doc('users/gracehopper')
+user.delete(recursive=False)
+```
+
+**Demo**: [Collection Deletion Helpers](/demos/topics/collection_deletion/)
 
 #### Document References
 Automatic conversion between FireObjects and DocumentReferences with lazy loading:
@@ -430,4 +458,3 @@ The workflow typically begins with creating an architecture document. For this p
 This approach has proven remarkably effective. AI-assisted development enables consistent quality throughout the project by eliminating the natural fatigue that comes with extensive coding sessions. Rather than managing implementation details, I focus on architecture, design decisions, and quality oversight. The result is comprehensive test coverage, detailed documentation, and cleaner code than would typically emerge from a rushed implementation.
 
 More broadly, this project serves as an exploration of AI-assisted software development. The tools have matured to where they can handle complex, multi-phase projects with proper scaffolding—good test infrastructure, clear architecture documents, and iterative validation. The development velocity is substantial, but more importantly, the consistency of output quality remains high across all phases. For prototyping and research tools where iteration speed matters, AI-assisted development offers a compelling approach worth exploring. 
-

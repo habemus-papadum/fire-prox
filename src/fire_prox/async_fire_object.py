@@ -5,7 +5,7 @@ This module implements the asynchronous FireObject class for use with
 google.cloud.firestore.AsyncClient.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from google.cloud.exceptions import NotFound
 from google.cloud.firestore_v1.async_document import AsyncDocumentReference
@@ -301,17 +301,47 @@ class AsyncFireObject(BaseFireObject):
 
         return self
 
-    async def delete(self, batch: Optional[Any] = None) -> None:
+    async def collections(self, names_only: bool = False) -> List[Any]:
+        """
+        List subcollections beneath this document asynchronously.
+
+        Args:
+            names_only: When True, return collection IDs instead of wrappers.
+
+        Returns:
+            List of subcollection names or AsyncFireCollection wrappers.
+        """
+        self._validate_not_detached("collections()")
+        self._validate_not_deleted("collections()")
+
+        results: List[Any] = []
+        async for subcollection_ref in self._doc_ref.collections():
+            if names_only:
+                results.append(subcollection_ref.id)
+            else:
+                results.append(self.collection(subcollection_ref.id))
+        return results
+
+    async def delete(
+        self,
+        batch: Optional[Any] = None,
+        *,
+        recursive: bool = True,
+        batch_size: int = 50,
+    ) -> None:
         """
         Delete the document from Firestore asynchronously.
 
         Args:
             batch: Optional batch object for batched deletes. If provided,
                   the delete will be accumulated in the batch (committed later).
+            recursive: When True (default), delete all subcollections first.
+            batch_size: Batch size to use for recursive subcollection cleanup.
 
         Raises:
             ValueError: If called on DETACHED object.
             RuntimeError: If called on DELETED object.
+            ValueError: If recursive deletion is requested while using a batch.
 
         State Transitions:
             ATTACHED -> DELETED
@@ -323,13 +353,58 @@ class AsyncFireObject(BaseFireObject):
 
             # Batch delete
             batch = db.batch()
-            user1.delete(batch=batch)
-            user2.delete(batch=batch)
+            user1.delete(batch=batch, recursive=False)
+            user2.delete(batch=batch, recursive=False)
             await batch.commit()  # Commit all operations
         """
+        if recursive:
+            if batch is not None:
+                raise ValueError("Cannot delete recursively as part of a batch.")
+            if batch_size <= 0:
+                raise ValueError(f"batch_size must be positive, got {batch_size}")
+            await self._delete_descendant_collections(batch_size=batch_size)
+
         self._prepare_delete()
         await self._write_delete(batch=batch)
         self._transition_to_deleted()
+
+    async def _delete_descendant_collections(self, batch_size: int) -> None:
+        """Delete all subcollections beneath this document asynchronously."""
+        names = await self.collections(names_only=True)
+        for name in names:
+            subcollection = self.collection(name)
+            await subcollection.delete_all(batch_size=batch_size, recursive=True)
+
+    # =========================================================================
+    # Subcollection Utilities
+    # =========================================================================
+
+    async def delete_subcollection(
+        self,
+        name: str,
+        *,
+        batch_size: int = 50,
+        recursive: bool = True,
+        dry_run: bool = False,
+    ) -> Dict[str, int]:
+        """
+        Delete a subcollection beneath this document asynchronously.
+
+        Args:
+            name: Subcollection name relative to this document.
+            batch_size: Maximum number of deletes per commit.
+            recursive: Whether to delete nested subcollections.
+            dry_run: Count affected documents without executing writes.
+
+        Returns:
+            Dictionary with counts for deleted documents and subcollections.
+        """
+        subcollection = self.collection(name)
+        return await subcollection.delete_all(
+            batch_size=batch_size,
+            recursive=recursive,
+            dry_run=dry_run,
+        )
 
     # =========================================================================
     # Factory Methods

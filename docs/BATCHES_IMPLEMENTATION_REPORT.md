@@ -105,7 +105,7 @@ def batch(self) -> Any:
         user1.save(batch=batch)
 
         user2 = db.doc('users/bob')
-        user2.delete(batch=batch)
+        user2.delete(batch=batch, recursive=False)
 
         # Commit all operations atomically
         batch.commit()
@@ -119,7 +119,7 @@ def batch(self) -> Any:
         await user1.save(batch=batch)
 
         user2 = db.doc('users/bob')
-        await user2.delete(batch=batch)
+        await user2.delete(batch=batch, recursive=False)
 
         # Commit all operations atomically
         await batch.commit()
@@ -225,8 +225,8 @@ def delete(self, batch: Optional[Any] = None) -> None:
 
         # Batch delete
         batch = db.batch()
-        user1.delete(batch=batch)
-        user2.delete(batch=batch)
+        user1.delete(batch=batch, recursive=False)
+        user2.delete(batch=batch, recursive=False)
         batch.commit()  # Commit all operations
     """
     self._validate_not_detached("delete()")
@@ -698,8 +698,8 @@ Once committed, batch operations cannot be rolled back:
 
 ```python
 batch = db.batch()
-user1.delete(batch=batch)
-user2.delete(batch=batch)
+user1.delete(batch=batch, recursive=False)
+user2.delete(batch=batch, recursive=False)
 batch.commit()  # POINT OF NO RETURN
 
 # Cannot undo! All operations are permanent.
@@ -741,7 +741,7 @@ def cleanup_inactive_users(days_inactive: int):
     batch = db.batch()
 
     for user in inactive:
-        user.delete(batch=batch)
+        user.delete(batch=batch, recursive=False)
         deleted += 1
 
         if deleted % 500 == 0:
@@ -806,7 +806,7 @@ user.save()  # Direct save
 batch = db.batch()
 user1.credits = 100
 user1.save(batch=batch)  # Batch save
-user2.delete(batch=batch)  # Batch delete
+user2.delete(batch=batch, recursive=False)  # Batch delete
 batch.commit()  # Commit atomically
 ```
 
@@ -824,7 +824,7 @@ Potential improvements for future versions:
    ```python
    with db.batch_context() as batch:
        user1.save(batch=batch)
-       user2.delete(batch=batch)
+       user2.delete(batch=batch, recursive=False)
        # Auto-commits on context exit
    ```
 

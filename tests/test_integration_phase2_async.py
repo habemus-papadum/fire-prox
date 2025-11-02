@@ -12,14 +12,14 @@ from src.fire_prox.testing import async_testing_client
 
 
 @pytest.fixture
-async def db():
+async def db(firestore_test_harness):
     """Create an AsyncFireProx instance connected to the emulator."""
     client = async_testing_client()
     return AsyncFireProx(client)
 
 
 @pytest.fixture
-async def test_collection(db):
+async def test_collection(db, firestore_test_harness):
     """Return a test collection name."""
     return db.collection('phase2_async_test_collection')
 
@@ -347,3 +347,140 @@ class TestSubcollectionsAsync:
         # Verify nested path
         assert comment.path == 'phase2_async_test_collection/ada_nested/posts/post1/comments/comment1'
         assert comment.is_loaded()
+
+    async def test_collections_lists_subcollections(self, test_collection, db):
+        """collections() should list subcollections by name and wrapper (async)."""
+        user = test_collection.new()
+        user.name = 'Ada Lovelace'
+        await user.save(doc_id='ada_lists')
+
+        posts = user.collection('posts')
+        post = posts.new()
+        post.title = 'Post'
+        await post.save(doc_id='post1')
+
+        names = await user.collections(names_only=True)
+        assert names == ['posts']
+
+        wrappers = await user.collections()
+        assert len(wrappers) == 1
+        assert wrappers[0].path == f"{test_collection.path}/ada_lists/posts"
+
+        db_subcollections = await db.collections(f"{test_collection.path}/ada_lists", names_only=True)
+        assert db_subcollections == ['posts']
+
+
+class TestCollectionDeletionAsync:
+    """Test async collection and subcollection deletion helpers."""
+
+    async def test_delete_all_supports_dry_run(self, test_collection):
+        """Dry-run should report counts without removing documents."""
+        for idx in range(3):
+            doc = test_collection.new()
+            doc.name = f'User {idx}'
+            await doc.save(doc_id=f'user{idx}')
+
+        preview = await test_collection.delete_all(dry_run=True)
+        assert preview == {'documents': 3, 'collections': 0}
+
+        docs_before = [doc async for doc in test_collection._collection_ref.list_documents()]
+        assert len(docs_before) == 3
+
+        summary = await test_collection.delete_all(batch_size=2)
+        assert summary == {'documents': 3, 'collections': 0}
+        docs_after = [doc async for doc in test_collection._collection_ref.list_documents()]
+        assert docs_after == []
+
+    async def test_delete_all_recursive_removes_subcollections(self, test_collection, db):
+        """Recursive delete should remove nested subcollections."""
+        user = test_collection.new()
+        user.name = 'Ada Lovelace'
+        await user.save(doc_id='ada')
+
+        posts = user.collection('posts')
+        for idx in range(2):
+            post = posts.new()
+            post.title = f'Post {idx}'
+            await post.save(doc_id=f'post{idx}')
+
+            comments = post.collection('comments')
+            comment = comments.new()
+            comment.text = f'Great work {idx}!'
+            await comment.save(doc_id=f'comment{idx}')
+
+        summary = await test_collection.delete_all(batch_size=1, recursive=True)
+        assert summary['documents'] == 5
+        assert summary['collections'] == 3
+        docs_after = [doc async for doc in test_collection._collection_ref.list_documents()]
+        assert docs_after == []
+
+        path = f"{test_collection.path}/ada/posts"
+        nested_docs = [doc async for doc in db.native_client.collection(path).list_documents()]
+        assert nested_docs == []
+
+    async def test_delete_subcollection_preserves_parent(self, test_collection):
+        """Deleting a subcollection should not remove the parent document."""
+        user = test_collection.new()
+        user.name = 'Ada Lovelace'
+        await user.save(doc_id='ada_parent')
+
+        posts = user.collection('posts')
+        for idx in range(2):
+            post = posts.new()
+            post.title = f'Post {idx}'
+            await post.save(doc_id=f'post{idx}')
+
+            comments = post.collection('comments')
+            comment = comments.new()
+            comment.text = f'Comment {idx}'
+            await comment.save(doc_id=f'comment{idx}')
+
+        summary = await user.delete_subcollection('posts')
+        assert summary['documents'] == 4
+        assert summary['collections'] == 2
+
+        await user.fetch(force=True)
+        assert user.is_loaded()
+        posts_remaining = [doc async for doc in user.collection('posts')._collection_ref.list_documents()]
+        assert posts_remaining == []
+
+    async def test_delete_recurses_by_default(self, test_collection, db):
+        """Async delete should cascade into subcollections by default."""
+        user = test_collection.new()
+        user.name = 'Ada Lovelace'
+        await user.save(doc_id='cascade_user')
+
+        posts = user.collection('posts')
+        post = posts.new()
+        post.title = 'Post'
+        await post.save(doc_id='post1')
+
+        comments = post.collection('comments')
+        comment = comments.new()
+        comment.text = 'Nested'
+        await comment.save(doc_id='comment1')
+
+        await user.delete()
+        assert user.is_deleted()
+
+        posts_path = f"{test_collection.path}/cascade_user/posts"
+        nested_docs = [doc async for doc in db.native_client.collection(posts_path).list_documents()]
+        assert nested_docs == []
+
+    async def test_delete_non_recursive_preserves_subcollections(self, test_collection, db):
+        """Async delete should skip subcollections when recursive=False."""
+        user = test_collection.new()
+        user.name = 'Ada Lovelace'
+        await user.save(doc_id='no_cascade')
+
+        posts = user.collection('posts')
+        post = posts.new()
+        post.title = 'Post'
+        await post.save(doc_id='post1')
+
+        await user.delete(recursive=False)
+        assert user.is_deleted()
+
+        posts_path = f"{test_collection.path}/no_cascade/posts"
+        remaining = [doc async for doc in db.native_client.collection(posts_path).list_documents()]
+        assert remaining

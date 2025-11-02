@@ -85,7 +85,7 @@ class TestBasicBatchOperations:
         batch = test_collection.batch()
 
         user = test_collection.doc('user3')
-        user.delete(batch=batch)
+        user.delete(batch=batch, recursive=False)
 
         batch.commit()
 
@@ -137,7 +137,7 @@ class TestBasicBatchOperations:
 
         for i in range(3):
             user = test_collection.doc(f'multi_delete_{i}')
-            user.delete(batch=batch)
+            user.delete(batch=batch, recursive=False)
 
         batch.commit()
 
@@ -183,7 +183,7 @@ class TestMixedBatchOperations:
 
         # Delete doc2
         user2 = test_collection.doc('mixed_2')
-        user2.delete(batch=batch)
+        user2.delete(batch=batch, recursive=False)
 
         # Set doc3
         user3 = test_collection.doc('mixed_3')
@@ -460,7 +460,7 @@ class TestBatchErrorCases:
         batch = test_collection.batch()
 
         with pytest.raises(RuntimeError, match="Cannot delete.*on a DELETED"):
-            user.delete(batch=batch)
+            user.delete(batch=batch, recursive=False)
 
 
 class TestBulkBatchOperations:
@@ -505,7 +505,7 @@ class TestBulkBatchOperations:
 
         for i in range(50):
             user = test_collection.doc(f'bulk_delete_{i}')
-            user.delete(batch=batch)
+            user.delete(batch=batch, recursive=False)
 
         batch.commit()
 

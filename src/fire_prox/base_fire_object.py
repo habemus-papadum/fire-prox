@@ -375,7 +375,7 @@ class BaseFireObject:
             user.save(batch=batch)
 
             other_user = db.doc('users/bob')
-            other_user.delete(batch=batch)
+            other_user.delete(batch=batch, recursive=False)
 
             # Commit all operations atomically
             batch.commit()

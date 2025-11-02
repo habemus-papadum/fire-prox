@@ -159,7 +159,7 @@ class BaseFireProx:
             user1.save(batch=batch)
 
             user2 = db.doc('users/bob')
-            user2.delete(batch=batch)
+            user2.delete(batch=batch, recursive=False)
 
             # Commit all operations atomically
             batch.commit()
@@ -173,7 +173,7 @@ class BaseFireProx:
             await user1.save(batch=batch)
 
             user2 = db.doc('users/bob')
-            await user2.delete(batch=batch)
+            await user2.delete(batch=batch, recursive=False)
 
             # Commit all operations atomically
             await batch.commit()

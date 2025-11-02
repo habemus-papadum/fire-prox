@@ -178,6 +178,20 @@ class AsyncFireProx(BaseFireProx):
         """
         return self._create_collection_proxy(path, AsyncFireCollection)
 
+    async def collections(self, path: str, *, names_only: bool = False) -> list[Any]:
+        """
+        List subcollections beneath the specified document path asynchronously.
+
+        Args:
+            path: Document path whose subcollections should be listed.
+            names_only: Return collection IDs instead of AsyncFireCollection wrappers.
+
+        Returns:
+            List of subcollection names or AsyncFireCollection wrappers.
+        """
+        document = self.doc(path)
+        return await document.collections(names_only=names_only)
+
     def _get_document_kwargs(self, path: str) -> Dict[str, Any]:
         sync_doc_ref = self._sync_client.document(path)
         return {'sync_doc_ref': sync_doc_ref, 'sync_client': self._sync_client}

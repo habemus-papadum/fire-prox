@@ -5,6 +5,8 @@ This module provides the synchronous FireProx class, which serves as the primary
 interface for users to interact with Firestore through the simplified FireProx API.
 """
 
+from typing import Any
+
 from google.cloud.firestore import Client as FirestoreClient
 
 from .base_fireprox import BaseFireProx
@@ -181,5 +183,19 @@ class FireProx(BaseFireProx):
             new_post.save()
         """
         return self._create_collection_proxy(path, FireCollection)
+
+    def collections(self, path: str, *, names_only: bool = False) -> list[Any]:
+        """
+        List subcollections beneath the specified document path.
+
+        Args:
+            path: Document path whose subcollections should be listed.
+            names_only: Return collection IDs instead of FireCollection wrappers.
+
+        Returns:
+            List of subcollection names or FireCollection wrappers.
+        """
+        document = self.doc(path)
+        return document.collections(names_only=names_only)
 
     # Note: batch() and transaction() methods are inherited from BaseFireProx
