@@ -58,16 +58,25 @@ abstraction layers such as adapter registries.
 ### Collection-Level Schema Binding
 
 Extend `FireCollection` and `AsyncFireCollection` to accept an optional
-`schema` argument when instantiated or via a fluent method:
+`schema` argument when instantiated. This keeps the call site concise while
+maintaining backwards compatibility:
 
 ```python
-users = db.collection("users").with_schema(UserProfile)
+users: FireCollection = db.collection("users", UserProfile)
+```
+
+Passing a schema at instantiation should work the same way for nested
+collections:
+
+```python
+orders: FireCollection = user.collection("orders", Order)
 ```
 
 Internally the collection caches lightweight metadata that captures the chosen
 dataclass type and derived field annotations. No validation or marshalling
 configuration is performed in this phase. The binding is propagated to newly
-created objects from that collection.
+created objects from that collection. When no schema is supplied—e.g.,
+`db.collection("users")`—the behavior is identical to today's Fire-Prox API.
 
 ### Generic Collection and Object Types
 
@@ -109,17 +118,21 @@ class Order:
     total: float
 
 
-users = db.collection("users").with_schema(UserProfile)
-orders = db.collection("orders").with_schema(Order)
+users: FireCollection = db.collection("users", UserProfile)
+orders: FireCollection = db.collection("orders", Order)
 
 ada = users.doc("ada")  # linter should see this as a UserProfile
 order_doc = orders.new()  # linter should see this as an Order
+user_orders: FireCollection = ada.collection("orders", Order)
 # Docs obtained from queries should also work the same way
 
 order_doc.purchaser = ada
 order_doc.total = 199.00
 order_doc.save()  # linter should not complain when using FireObject methods
 ```
+
+Calling `db.collection("users")` without a schema argument remains fully
+supported, preserving the existing dynamic ergonomics.
 
 ### Query Type Propagation
 
@@ -219,6 +232,21 @@ analysis. The proposed approach is:
 These tests exercise the static contracts without requiring the Firebase
 emulator or altering runtime execution paths.
 
+## Typing Infrastructure Considerations
+
+- Favor `.pyi` type stubs to express the generic relationships and overload
+  behaviors described above. Retrofitting the runtime modules with complex
+  annotations risks destabilizing the implementation, whereas dedicated stubs
+  can model richer typing logic without touching production code.
+- Expect to ship new or updated stubs for the `fire_prox` package alongside the
+  feature. Without `.pyi` files encoding the overloads for `collection()` and
+  subcollection helpers, static type checkers are unlikely to infer the desired
+  shapes; it is almost certain the proposal will fall short without them, and
+  feasibility still needs to be validated once the stubs exist.
+- Use runtime annotations only where they remain simple and maintainable;
+  anything more elaborate should live exclusively in the stub files, even if the
+  approach requires experimentation to verify feasibility.
+
 ## Implementation Plan
 
 1. **Dataclass schema analysis**
@@ -240,6 +268,11 @@ emulator or altering runtime execution paths.
 5. **Static analysis test harness**
    - Add the type-fixture modules and configure CI to run `pyright`/`mypy`
      against them, capturing both positive and negative cases.
+6. **Type stub publication**
+   - Author `.pyi` files (or extend existing ones) that encode the collection
+     overloads, generic propagation, and FireObject behaviors needed for
+     checkers to understand the new surface area without complicating the
+     runtime modules.
 
 ## Future Work
 
